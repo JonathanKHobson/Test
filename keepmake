@@ -1,0 +1,237 @@
+ (cd "$(git rev-parse --show-toplevel)" && git apply --3way <<'EOF' 
+diff --git a//dev/null b/keepmake/index.html
+index 0000000000000000000000000000000000000000..8bef0968a60f424b781ce754f2087f5ba0bac49a 100644
+--- a//dev/null
++++ b/keepmake/index.html
+@@ -0,0 +1,228 @@
++<!DOCTYPE html>
++<html lang="en">
++<head>
++    <meta charset="UTF-8">
++    <meta name="viewport" content="width=device-width, initial-scale=1.0">
++    <title>KeepMake</title>
++    <style>
++        body {
++            font-family: Arial, sans-serif;
++            margin: 0;
++            padding: 0;
++            background: #fafafa;
++            display: flex;
++            flex-direction: column;
++            min-height: 100vh;
++        }
++        header {
++            background: #6C5B7B;
++            color: #fff;
++            padding: 1rem;
++            text-align: center;
++        }
++        main {
++            flex: 1;
++            padding: 1rem;
++        }
++        .memory-list {
++            list-style: none;
++            padding: 0;
++        }
++        .memory-card {
++            background: #fff;
++            border-radius: 8px;
++            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
++            margin-bottom: 1rem;
++            padding: 1rem;
++        }
++        .add-btn {
++            position: fixed;
++            bottom: 20px;
++            right: 20px;
++            width: 56px;
++            height: 56px;
++            border-radius: 50%;
++            background: #F67280;
++            color: #fff;
++            font-size: 2rem;
++            border: none;
++            cursor: pointer;
++        }
++        .overlay {
++            display: none;
++            position: fixed;
++            top: 0;
++            left: 0;
++            width: 100%;
++            height: 100%;
++            background: rgba(0,0,0,0.5);
++            justify-content: center;
++            align-items: center;
++        }
++        .dialog {
++            background: #fff;
++            padding: 1rem;
++            width: 90%;
++            max-width: 400px;
++            border-radius: 8px;
++        }
++        .prompt-grid {
++            display: grid;
++            grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
++            gap: 10px;
++            margin-bottom: 1rem;
++        }
++        .prompt {
++            background: #F8B195;
++            color: #fff;
++            border: none;
++            padding: 10px;
++            border-radius: 6px;
++            cursor: pointer;
++        }
++        label {
++            display: block;
++            margin-top: 0.5rem;
++        }
++        input[type="text"], select, textarea {
++            width: 100%;
++            padding: 0.5rem;
++            margin-top: 0.25rem;
++            border-radius: 4px;
++            border: 1px solid #ccc;
++        }
++        button.save {
++            margin-top: 1rem;
++            width: 100%;
++            padding: 0.75rem;
++            background: #6C5B7B;
++            color: #fff;
++            border: none;
++            border-radius: 6px;
++            cursor: pointer;
++        }
++    </style>
++</head>
++<body>
++    <header>
++        <h1>KeepMake</h1>
++    </header>
++
++    <main>
++        <ul id="memoryList" class="memory-list"></ul>
++    </main>
++
++    <button id="addBtn" class="add-btn">+</button>
++
++    <div id="overlay" class="overlay">
++        <div class="dialog">
++            <div id="step1">
++                <h3>Select a Prompt</h3>
++                <div class="prompt-grid" id="promptGrid"></div>
++            </div>
++            <div id="step2" style="display:none;">
++                <h3>Who is this about?</h3>
++                <select id="whoSelect">
++                    <option value="Child">Child</option>
++                    <option value="Parent">Parent</option>
++                    <option value="Family">Family Member</option>
++                    <option value="Me">Just Me</option>
++                </select>
++                <button id="nextToText">Next</button>
++            </div>
++            <div id="step3" style="display:none;">
++                <h3 id="promptLabel"></h3>
++                <textarea id="memoryText" rows="4" placeholder="Today I..."></textarea>
++                <button class="save" id="saveMemory">Save Memory</button>
++            </div>
++        </div>
++    </div>
++
++    <script>
++        const prompts = [
++            { label: "A Win", emoji: "\uD83C\uDFC6" },
++            { label: "A Struggle", emoji: "\uD83D\uDE14" },
++            { label: "A Quote", emoji: "\u2753" },
++            { label: "A Creation", emoji: "\u2728" },
++            { label: "+ Add Your Own", emoji: "\u2795" }
++        ];
++
++        const addBtn = document.getElementById('addBtn');
++        const overlay = document.getElementById('overlay');
++        const promptGrid = document.getElementById('promptGrid');
++        const step1 = document.getElementById('step1');
++        const step2 = document.getElementById('step2');
++        const step3 = document.getElementById('step3');
++        const promptLabel = document.getElementById('promptLabel');
++        let selectedPrompt = null;
++
++        function renderPrompts() {
++            promptGrid.innerHTML = '';
++            prompts.forEach(p => {
++                const btn = document.createElement('button');
++                btn.textContent = `${p.emoji} ${p.label}`;
++                btn.className = 'prompt';
++                btn.onclick = () => {
++                    selectedPrompt = p.label;
++                    step1.style.display = 'none';
++                    step2.style.display = 'block';
++                };
++                promptGrid.appendChild(btn);
++            });
++        }
++
++        function loadMemories() {
++            const memories = JSON.parse(localStorage.getItem('memories') || '[]');
++            const list = document.getElementById('memoryList');
++            list.innerHTML = '';
++            memories.forEach(m => {
++                const li = document.createElement('li');
++                li.className = 'memory-card';
++                li.innerHTML = `<strong>${m.prompt}</strong> about <em>${m.who}</em><p>${m.text}</p>`;
++                list.appendChild(li);
++            });
++        }
++
++        function saveMemory() {
++            const who = document.getElementById('whoSelect').value;
++            const text = document.getElementById('memoryText').value;
++            if (!selectedPrompt || !text) return;
++            const memories = JSON.parse(localStorage.getItem('memories') || '[]');
++            memories.push({ prompt: selectedPrompt, who, text, date: Date.now() });
++            localStorage.setItem('memories', JSON.stringify(memories));
++            overlay.style.display = 'none';
++            step1.style.display = 'block';
++            step2.style.display = 'none';
++            step3.style.display = 'none';
++            document.getElementById('memoryText').value = '';
++            loadMemories();
++            alert('Memory Saved!');
++        }
++
++        addBtn.onclick = () => {
++            overlay.style.display = 'flex';
++            renderPrompts();
++        };
++
++        document.getElementById('nextToText').onclick = () => {
++            step2.style.display = 'none';
++            step3.style.display = 'block';
++            promptLabel.textContent = selectedPrompt;
++        };
++
++        document.getElementById('saveMemory').onclick = saveMemory;
++
++        overlay.onclick = (e) => {
++            if (e.target === overlay) {
++                overlay.style.display = 'none';
++                step1.style.display = 'block';
++                step2.style.display = 'none';
++                step3.style.display = 'none';
++            }
++        };
++
++        loadMemories();
++    </script>
++</body>
++</html>
++
+ 
+EOF
+)
