@@ -91,8 +91,37 @@ function safeFirstSentences(text, n=2){
   const m = String(text).match(/[A-Z][^.!?]*[.!?]/g);
   return (m || []).slice(0, n);
 }
+
+// ---- Robust string helpers ----
+function extractStrings(x){
+  const out = [];
+  const visit = (v) => {
+    if (!v) return;
+    if (typeof v === 'string') { out.push(v); return; }
+    if (Array.isArray(v)) { v.forEach(visit); return; }
+    if (typeof v === 'object') { Object.values(v).forEach(visit); return; }
+  };
+  visit(x);
+  return out;
+}
+function asText(v){
+  if (!v) return '';
+  if (typeof v === 'string') return v;
+  if (Array.isArray(v)) return (v.map(asText).find(Boolean) || '');
+  if (typeof v === 'object'){
+    // common language keys first
+    for (const k of ['en','en-GB','en-US']) if (typeof v[k] === 'string') return v[k];
+    // fallback: first string we can find
+    const first = extractStrings(v)[0];
+    return first || '';
+  }
+  return String(v);
+}
+
+
 function defaultToneForOccupation(label){
-  const l = (label||'').toLowerCase();
+  const l = String(label||'').toLowerCase();
+
   if (l.includes("research")) return "Curious, methodical, empathetic";
   if (l.includes("design")) return "Pragmatic, user-centered, collaborative";
   if (l.includes("engineer") || l.includes("developer")) return "Analytical, precise, systems-minded";
@@ -167,22 +196,28 @@ async function getEssentialSkillsForOccupation(uri, limit = 50) {
   if (!res.ok) return [];
   const data = await res.json();
   const rel = data?._embedded?.related || data?.related || [];
-  return rel
-    .map((r) => r.title || r.preferredLabel || r.label || r._links?.self?.title)
-    .filter(Boolean);
+return rel
+  .map((r) => asText(r.title) || asText(r.preferredLabel) || asText(r.label) || asText(r._links?.self?.title))
+  .filter(Boolean);
+
 }
 
 
 function toPersona(occ, essentialSkills){
-  const label = occ.preferredLabel || occ.title || "Unknown role";
-  const id = slugify(occ.uri);
-  const summary = occ.description || "";
+  const occUri = occ.uri || occ._links?.self?.href || occ._links?.occupation?.href || '';
+  const label  = asText(occ.preferredLabel) || asText(occ.title) || asText(occ.prefLabel) || asText(occ.label) || "Unknown role";
+  const id     = slugify(occUri || label.toLowerCase().replace(/\s+/g,'-'));
+  const summary= asText(occ.description) || "";
+
+  const alt = extractStrings(occ.altLabels || []);
   const coreTasks = dedupe([
-    ...(occ.altLabels || []).slice(0, MAX_TASKS),
+    ...alt.slice(0, MAX_TASKS),
     ...safeFirstSentences(summary, 2)
   ]).slice(0, MAX_TASKS);
 
-  const skills = (essentialSkills || []).slice(0, MAX_SKILLS);
+  const skillsRaw = (essentialSkills || []).map(asText).filter(Boolean);
+  const skills = dedupe(skillsRaw).slice(0, MAX_SKILLS);
+
   const tone = defaultToneForOccupation(label);
   const goals = deriveGoalsFromSkills(skills);
   const pains = derivePainsFromSkills(skills);
@@ -191,7 +226,7 @@ function toPersona(occ, essentialSkills){
   return {
     id,
     name: label,
-    profession: occ.broaderPreferredLabel || label,
+    profession: asText(occ.broaderPreferredLabel) || asText(occ.broaderPrefLabel) || label,
     seniority: "General",
     summary,
     goals,
@@ -202,7 +237,7 @@ function toPersona(occ, essentialSkills){
     core_tasks: coreTasks,
     skills,
     tags: [],
-    mappings: { esco_occupation: occ.uri, onetsoc: "" },
+    mappings: { esco_occupation: occUri, onetsoc: "" },
     sample_prompts: [
       `Draft a one-week plan to improve ${label.toLowerCase()} outcomes using the listed skills.`,
       `Given these pain points, propose three experiments to reduce risk.`
@@ -212,6 +247,7 @@ function toPersona(occ, essentialSkills){
   };
 }
 
+
 function renderResults(list){
   el.results.innerHTML = '';
   el.count.textContent = list.length ? `(${list.length})` : '';
@@ -219,8 +255,7 @@ function renderResults(list){
     const row = document.createElement('div');
     row.className = 'result';
     const left = document.createElement('div');
-    left.innerHTML = `<div>${item.title || item.preferredLabel || 'Unknown'}</div><small>${item.broaderPreferredLabel || 'Occupation'}</small>`;
-    const right = document.createElement('div');
+    left.innerHTML = `<div>${asText(item.title) || asText(item.preferredLabel) || 'Unknown'}</div><small>${asText(item.broaderPreferredLabel) || 'Occupation'}</small>`;
     const btn = document.createElement('button');
     btn.className = 'pick';
     btn.textContent = 'Add';
@@ -250,7 +285,9 @@ function renderResults(list){
 function updatePreview(){
   el.selCount.textContent = selectedPersonas.length ? `(${selectedPersonas.length} selected)` : '';
   el.out.textContent = JSON.stringify({ version:1, personas: selectedPersonas }, null, 2);
+  el.exportBtn.disabled = selectedPersonas.length === 0;
 }
+
 
 async function doSearch(){
   const q = el.q.value.trim();
@@ -259,15 +296,30 @@ async function doSearch(){
   try{
     let items = [];
     try {
-      items = await searchOccupations(q); // suggest2 (fast)
-    } catch (e1) {
-      console.warn('suggest2 failed, trying fallback', e1);
-      items = await searchOccupationsFallback(q); // resource search (reliable)
+      items = await searchOccupations(q); // primary (suggest2)
+    } catch(e1) {
+      console.warn('suggest2 failed, falling back', e1);
+      items = await searchOccupationsFallback(q); // reliable fallback
     }
     renderResults(items);
   }catch(e){
     showError(e);
   }
+}
+
+async function searchOccupationsFallback(query, limit = 25) {
+  // ESCO resource search fallback (slower but steady)
+  const url = `${ESCO_BASE}/resource/occupation?text=${encodeURIComponent(query)}&language=en&limit=${limit}`;
+  const res = await fetch(maybeProxy(url), { headers: { "Accept": "application/json" } });
+  if (!res.ok) throw new Error(`ESCO occupation search failed: ${res.status}`);
+  const data = await res.json();
+  const list = data?._embedded?.occupation || [];
+  return list.map(o => {
+    const uri = o.uri || o._links?.self?.href || "";
+    const title = o.preferredLabel || o.title || "";
+    const broader = o.broaderPreferredLabel || "";
+    return uri && title ? { uri, preferredLabel: title, broaderPreferredLabel: broader } : null;
+  }).filter(Boolean);
 }
 
 
