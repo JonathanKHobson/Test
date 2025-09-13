@@ -1,0 +1,315 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Persona Builder — ESCO Test</title>
+<style>
+  :root{ --bg:#0b0f14; --card:#0f151d; --text:#e7eff7; --muted:#9db0c3; --accent:#4ea1ff; --border:#1b2838; --radius:12px; }
+  body{ margin:0; font-family:ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Inter, Arial; background:var(--bg); color:var(--text); }
+  header{ display:flex; gap:12px; align-items:center; padding:14px 16px; border-bottom:1px solid var(--border); position:sticky; top:0; background:linear-gradient(#0b0f1488,#0b0f14 60%); backdrop-filter:saturate(1.2) blur(6px);}
+  input[type="text"]{ flex:1; padding:10px 12px; border-radius:10px; border:1px solid var(--border); background:#0c121a; color:var(--text); }
+  button{ cursor:pointer; border:1px solid var(--border); background:#13202e; color:var(--text); padding:10px 12px; border-radius:10px; }
+  button.primary{ background:var(--accent); color:#061422; border:none; }
+  main{ display:grid; grid-template-columns: 360px 1fr; gap:16px; padding:16px; }
+  .card{ background:var(--card); border:1px solid var(--border); border-radius:var(--radius); padding:12px; }
+  .results{ max-height:60vh; overflow:auto; display:flex; flex-direction:column; gap:8px; }
+  .result{ border:1px solid var(--border); border-radius:10px; padding:10px; display:flex; justify-content:space-between; align-items:center; gap:10px; }
+  .result small{ color:var(--muted); display:block; margin-top:2px; }
+  .result .pick{ white-space:nowrap; }
+  .pill{ font-size:12px; color:var(--muted); border:1px solid var(--border); padding:2px 6px; border-radius:999px; }
+  .stack{ display:flex; flex-direction:column; gap:10px; }
+  .row{ display:flex; gap:8px; align-items:center; }
+  pre{ white-space:pre-wrap; word-break:break-word; font-family:ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace; background:#0b1119; padding:10px; border-radius:10px; border:1px solid var(--border); }
+  .muted{ color:var(--muted); }
+</style>
+</head>
+<body>
+  <header>
+    <strong>Persona Builder — ESCO Probe</strong>
+    <input id="q" type="text" placeholder="Try: ux, researcher, nurse, developer…" />
+    <button id="search">Search</button>
+    <button id="export" class="primary" disabled>Export as JS</button>
+    <label style="font-size:12px;">
+  <input type="checkbox" id="toggle-proxy">
+  Use dev CORS proxy (only if needed)
+</label>
+  </header>
+
+  <main>
+    <section class="card stack">
+      <div class="row"><span class="pill">Results</span><span id="count" class="muted"></span></div>
+      <div id="results" class="results" role="listbox" aria-label="Search results"></div>
+    </section>
+
+    <section class="card stack">
+      <div class="row"><span class="pill">Preview (normalized personas)</span><span id="selCount" class="muted"></span></div>
+      <pre id="out" aria-live="polite">{ "personas": [] }</pre>
+    </section>
+  </main>
+
+<script>
+
+
+// DEV: CORS helper (toggle via checkbox); warns if page is opened via file://
+let USE_PROXY = false;
+function maybeProxy(url) {
+  return USE_PROXY ? `https://cors.isomorphic-git.org/${url}` : url;
+}
+window.addEventListener("DOMContentLoaded", () => {
+  if (location.protocol === "file:") {
+    const warn = document.createElement("div");
+    warn.textContent = "Heads up: running from file:// often breaks public APIs due to CORS. Start a local server (e.g., `python -m http.server 8080`) and open http://localhost:8080/test-persona.html";
+    warn.style.cssText = "background:#fff3cd;color:#664d03;padding:8px;border:1px solid #ffecb5;margin-bottom:8px;border-radius:6px;font:12px/1.4 system-ui";
+    document.body.prepend(warn);
+  }
+  const proxyToggle = document.getElementById("toggle-proxy");
+  if (proxyToggle) proxyToggle.addEventListener("change", (e) => (USE_PROXY = e.target.checked));
+});
+
+
+const ESCO_BASE = "https://ec.europa.eu/esco/api";
+const MAX_TASKS = 6;
+const MAX_SKILLS = 10;
+
+const el = {
+  q: document.getElementById('q'),
+  search: document.getElementById('search'),
+  exportBtn: document.getElementById('export'),
+  results: document.getElementById('results'),
+  out: document.getElementById('out'),
+  count: document.getElementById('count'),
+  selCount: document.getElementById('selCount')
+};
+
+let selectedPersonas = []; // normalized persona objects
+
+function slugify(u){ try{ return u.split("/").filter(Boolean).pop(); }catch(e){ return String(u||'').replace(/[^\w-]+/g,'-').toLowerCase(); } }
+function dedupe(arr){ return [...new Set((arr||[]).filter(Boolean))]; }
+function safeFirstSentences(text, n=2){
+  if (!text) return [];
+  const m = String(text).match(/[A-Z][^.!?]*[.!?]/g);
+  return (m || []).slice(0, n);
+}
+function defaultToneForOccupation(label){
+  const l = (label||'').toLowerCase();
+  if (l.includes("research")) return "Curious, methodical, empathetic";
+  if (l.includes("design")) return "Pragmatic, user-centered, collaborative";
+  if (l.includes("engineer") || l.includes("developer")) return "Analytical, precise, systems-minded";
+  if (l.includes("manager")) return "Outcome-driven, communicative, structured";
+  return "Professional, clear, evidence-oriented";
+}
+function deriveGoalsFromSkills(skills){
+  const goals = [];
+  for (const s of (skills||[]).slice(0,4)) goals.push(`Improve outcomes using ${s.toLowerCase()}`);
+  goals.push("Reduce risk and rework");
+  return dedupe(goals);
+}
+function derivePainsFromSkills(skills){
+  const pains = [];
+  for (const s of (skills||[]).slice(0,4)) pains.push(`Gaps in ${s.toLowerCase()} across team`);
+  pains.push("Time constraints and shifting priorities");
+  return dedupe(pains);
+}
+
+async function searchOccupations(query, limit = 25) {
+  const url = `${ESCO_BASE}/suggest2?text=${encodeURIComponent(query)}&language=en&type=occupation&limit=${limit}`;
+  const res = await fetch(maybeProxy(url), { headers: { "Accept": "application/json" } });
+  if (!res.ok) throw new Error(`ESCO suggest2 failed: ${res.status}`);
+  const data = await res.json();
+
+  // HAL-safe extraction: accept a few shapes
+  const items =
+    data?._embedded?.results ||
+    data?._embedded?.suggestions ||
+    data?.results ||
+    data?.suggestions ||
+    [];
+
+  return items
+    .map((it) => {
+      const uri = it.uri || it._links?.self?.href || it._links?.occupation?.href || "";
+      const title = it.title || it.prefLabel || it.preferredLabel || it.label || "";
+      const broader = it.broaderPreferredLabel || it.broaderPrefLabel || it.occupationGroup || "";
+      return uri && title ? { uri, preferredLabel: title, broaderPreferredLabel: broader } : null;
+    })
+    .filter(Boolean);
+}
+
+async function searchOccupationsFallback(query, limit = 25) {
+  // ESCO resource search fallback (slower but reliable)
+  const url = `${ESCO_BASE}/resource/occupation?text=${encodeURIComponent(query)}&language=en&limit=${limit}`;
+  const res = await fetch(maybeProxy(url), { headers: { "Accept": "application/json" } });
+  if (!res.ok) throw new Error(`ESCO occupation search failed: ${res.status}`);
+  const data = await res.json();
+  const list = data?._embedded?.occupation || [];
+  return list.map(o => {
+    const uri = o.uri || o._links?.self?.href || "";
+    const title = o.preferredLabel || o.title || "";
+    const broader = o.broaderPreferredLabel || "";
+    return uri && title ? { uri, preferredLabel: title, broaderPreferredLabel: broader } : null;
+  }).filter(Boolean);
+}
+
+
+
+async function getOccupationByUri(uri) {
+  const url = `${ESCO_BASE}/resource/occupation?uri=${encodeURIComponent(uri)}&language=en`;
+  const res = await fetch(maybeProxy(url), { headers: { "Accept": "application/json" } });
+  if (!res.ok) throw new Error(`ESCO occupation get failed: ${res.status}`);
+  return await res.json(); // HAL object with description, labels, links
+}
+
+
+async function getEssentialSkillsForOccupation(uri, limit = 50) {
+  const url = `${ESCO_BASE}/resource/related?uri=${encodeURIComponent(uri)}&relation=hasEssentialSkill&language=en&full=false&limit=${limit}`;
+  const res = await fetch(maybeProxy(url), { headers: { "Accept": "application/json" } });
+  if (!res.ok) return [];
+  const data = await res.json();
+  const rel = data?._embedded?.related || data?.related || [];
+  return rel
+    .map((r) => r.title || r.preferredLabel || r.label || r._links?.self?.title)
+    .filter(Boolean);
+}
+
+
+function toPersona(occ, essentialSkills){
+  const label = occ.preferredLabel || occ.title || "Unknown role";
+  const id = slugify(occ.uri);
+  const summary = occ.description || "";
+  const coreTasks = dedupe([
+    ...(occ.altLabels || []).slice(0, MAX_TASKS),
+    ...safeFirstSentences(summary, 2)
+  ]).slice(0, MAX_TASKS);
+
+  const skills = (essentialSkills || []).slice(0, MAX_SKILLS);
+  const tone = defaultToneForOccupation(label);
+  const goals = deriveGoalsFromSkills(skills);
+  const pains = derivePainsFromSkills(skills);
+  const vocab = skills.map(s => s.split(" ").slice(0,3).join(" "));
+
+  return {
+    id,
+    name: label,
+    profession: occ.broaderPreferredLabel || label,
+    seniority: "General",
+    summary,
+    goals,
+    pain_points: pains,
+    tone,
+    vocabulary: vocab,
+    tools: [],
+    core_tasks: coreTasks,
+    skills,
+    tags: [],
+    mappings: { esco_occupation: occ.uri, onetsoc: "" },
+    sample_prompts: [
+      `Draft a one-week plan to improve ${label.toLowerCase()} outcomes using the listed skills.`,
+      `Given these pain points, propose three experiments to reduce risk.`
+    ],
+    dos: ["Cite evidence", "Show alternatives", "Prefer plain language"],
+    donts: ["Speculate without data", "Overfit to one stakeholder"]
+  };
+}
+
+function renderResults(list){
+  el.results.innerHTML = '';
+  el.count.textContent = list.length ? `(${list.length})` : '';
+  list.slice(0, 50).forEach(item=>{
+    const row = document.createElement('div');
+    row.className = 'result';
+    const left = document.createElement('div');
+    left.innerHTML = `<div>${item.title || item.preferredLabel || 'Unknown'}</div><small>${item.broaderPreferredLabel || 'Occupation'}</small>`;
+    const right = document.createElement('div');
+    const btn = document.createElement('button');
+    btn.className = 'pick';
+    btn.textContent = 'Add';
+    btn.addEventListener('click', async ()=>{
+      btn.disabled = true;
+      try{
+       const full = await getOccupationByUri(item.uri);
+
+        const skills = await getEssentialSkillsForOccupation(item.uri);
+        const persona = toPersona(full, skills);
+        selectedPersonas.push(persona);
+        updatePreview();
+        el.exportBtn.disabled = selectedPersonas.length === 0;
+      }catch(e){
+        alert(e.message || String(e));
+      }finally{
+        btn.disabled = false;
+      }
+    });
+    right.appendChild(btn);
+    row.appendChild(left);
+    row.appendChild(right);
+    el.results.appendChild(row);
+  });
+}
+
+function updatePreview(){
+  el.selCount.textContent = selectedPersonas.length ? `(${selectedPersonas.length} selected)` : '';
+  el.out.textContent = JSON.stringify({ version:1, personas: selectedPersonas }, null, 2);
+}
+
+async function doSearch(){
+  const q = el.q.value.trim();
+  if (q.length < 2){ alert('Type at least 2 characters'); return; }
+  el.results.innerHTML = '<div class="muted">Searching…</div>';
+  try{
+    let items = [];
+    try {
+      items = await searchOccupations(q); // suggest2 (fast)
+    } catch (e1) {
+      console.warn('suggest2 failed, trying fallback', e1);
+      items = await searchOccupationsFallback(q); // resource search (reliable)
+    }
+    renderResults(items);
+  }catch(e){
+    showError(e);
+  }
+}
+
+
+function showError(err) {
+  const msg = (err && (err.message || err.toString())) || "Unknown error";
+  console.error('ESCO error', err);
+  el.results.innerHTML = `<div style="color:#b42318">Error: ${escapeHtml(msg)}</div>
+  <div style="font-size:12px;color:#6b7280">Open DevTools → Network to see the failing request and status.<br/>If you see CORS errors, run a local server or toggle the dev proxy above.</div>`;
+}
+function escapeHtml(s){ return s.replace(/[&<>"'`=\/]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;','/':'&#x2F;','`':'&#x60;','=':'&#x3D;'}[c])); }
+
+
+function downloadJS(){
+  const payload = {
+    version: 1,
+    source: 'ESCO',
+    generated: new Date().toISOString(),
+    personas: selectedPersonas
+  };
+  const js = `// personas.data.js — generated via test-persona.html
+// Source: ESCO (https://ec.europa.eu/esco/)
+// Generated: ${payload.generated}
+window.PERSONAS = ${JSON.stringify(payload, null, 2)};`;
+  const blob = new Blob([js], { type: 'application/javascript;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'personas.data.js';
+  document.body.appendChild(a);
+  a.click();
+  URL.revokeObjectURL(url);
+  a.remove();
+}
+
+// Wire up
+el.search.addEventListener('click', doSearch);
+el.q.addEventListener('keydown', (e)=>{ if (e.key === 'Enter') doSearch(); });
+el.exportBtn.addEventListener('click', downloadJS);
+
+// Helpful default
+el.q.value = 'ux';
+doSearch();
+</script>
+</body>
+</html>
