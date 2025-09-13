@@ -142,35 +142,20 @@ function derivePainsFromSkills(skills){
 }
 
 async function searchOccupations(query, limit = 25) {
-  const url = `${ESCO_BASE}/suggest2?text=${encodeURIComponent(query)}&language=en&type=occupation&limit=${limit}`;
-  const res = await fetch(maybeProxy(url), { headers: { "Accept": "application/json" } });
-  if (!res.ok) throw new Error(`ESCO suggest2 failed: ${res.status}`);
-  const data = await res.json();
+   const url = `${ESCO_BASE}/suggest2?text=${encodeURIComponent(query)}&language=en&type=occupation&limit=${limit}`;
+  const data = await fetchJSONCORS(url);
+  const items = data?._embedded?.results || data?._embedded?.suggestions || data?.results || data?.suggestions || [];
+  return items.map((it) => {
+    const uri = it.uri || it._links?.self?.href || it._links?.occupation?.href || "";
+    const title = it.title || it.prefLabel || it.preferredLabel || it.label || "";
+    const broader = it.broaderPreferredLabel || it.broaderPrefLabel || it.occupationGroup || "";
+    return uri && title ? { uri, preferredLabel: title, broaderPreferredLabel: broader } : null;
+  }).filter(Boolean);
 
-  // HAL-safe extraction: accept a few shapes
-  const items =
-    data?._embedded?.results ||
-    data?._embedded?.suggestions ||
-    data?.results ||
-    data?.suggestions ||
-    [];
-
-  return items
-    .map((it) => {
-      const uri = it.uri || it._links?.self?.href || it._links?.occupation?.href || "";
-      const title = it.title || it.prefLabel || it.preferredLabel || it.label || "";
-      const broader = it.broaderPreferredLabel || it.broaderPrefLabel || it.occupationGroup || "";
-      return uri && title ? { uri, preferredLabel: title, broaderPreferredLabel: broader } : null;
-    })
-    .filter(Boolean);
-}
 
 async function searchOccupationsFallback(query, limit = 25) {
-  // ESCO resource search fallback (slower but reliable)
   const url = `${ESCO_BASE}/resource/occupation?text=${encodeURIComponent(query)}&language=en&limit=${limit}`;
-  const res = await fetch(maybeProxy(url), { headers: { "Accept": "application/json" } });
-  if (!res.ok) throw new Error(`ESCO occupation search failed: ${res.status}`);
-  const data = await res.json();
+  const data = await fetchJSONCORS(url);
   const list = data?._embedded?.occupation || [];
   return list.map(o => {
     const uri = o.uri || o._links?.self?.href || "";
@@ -178,12 +163,14 @@ async function searchOccupationsFallback(query, limit = 25) {
     const broader = o.broaderPreferredLabel || "";
     return uri && title ? { uri, preferredLabel: title, broaderPreferredLabel: broader } : null;
   }).filter(Boolean);
-}
+
 
 
 
 async function getOccupationByUri(uri) {
-  const url = `${ESCO_BASE}/resource/occupation?uri=${encodeURIComponent(uri)}&language=en`;
+    const url = `${ESCO_BASE}/resource/occupation?uri=${encodeURIComponent(uri)}&language=en`;
+  return await fetchJSONCORS(url);
+
   const res = await fetch(maybeProxy(url), { headers: { "Accept": "application/json" } });
   if (!res.ok) throw new Error(`ESCO occupation get failed: ${res.status}`);
   return await res.json(); // HAL object with description, labels, links
@@ -191,14 +178,13 @@ async function getOccupationByUri(uri) {
 
 
 async function getEssentialSkillsForOccupation(uri, limit = 50) {
-  const url = `${ESCO_BASE}/resource/related?uri=${encodeURIComponent(uri)}&relation=hasEssentialSkill&language=en&full=false&limit=${limit}`;
-  const res = await fetch(maybeProxy(url), { headers: { "Accept": "application/json" } });
-  if (!res.ok) return [];
-  const data = await res.json();
+    const url = `${ESCO_BASE}/resource/related?uri=${encodeURIComponent(uri)}&relation=hasEssentialSkill&language=en&full=false&limit=${limit}`;
+  const data = await fetchJSONCORS(url);
   const rel = data?._embedded?.related || data?.related || [];
-return rel
-  .map((r) => asText(r.title) || asText(r.preferredLabel) || asText(r.label) || asText(r._links?.self?.title))
-  .filter(Boolean);
+  return rel
+    .map((r) => asText(r.title) || asText(r.preferredLabel) || asText(r.label) || asText(r._links?.self?.title))
+    .filter(Boolean);
+
 
 }
 
@@ -259,33 +245,51 @@ function renderResults(list){
     const btn = document.createElement('button');
     btn.className = 'pick';
     btn.textContent = 'Add';
-    btn.addEventListener('click', async ()=>{
-      btn.disabled = true;
-      try{
-       const full = await getOccupationByUri(item.uri);
-
-        const skills = await getEssentialSkillsForOccupation(item.uri);
-        const persona = toPersona(full, skills);
-        selectedPersonas.push(persona);
-        updatePreview();
-        el.exportBtn.disabled = selectedPersonas.length === 0;
-      }catch(e){
-        alert(e.message || String(e));
-      }finally{
-        btn.disabled = false;
-      }
+btn.addEventListener('click', async ()=>{
+  btn.disabled = true;
+  try {
+    // Try full enrichment
+    const full = await getOccupationByUri(item.uri);
+    const skills = await getEssentialSkillsForOccupation(item.uri);
+    const persona = toPersona(full, skills);
+    selectedPersonas.push(persona);
+  } catch (e) {
+    console.warn('Enrichment failed, using minimal persona', e);
+    // Minimal fallback from the suggestion row so the flow still works
+    const name = asText(item.preferredLabel) || asText(item.title) || 'Unknown role';
+    const id = slugify(item.uri || name.toLowerCase().replace(/\s+/g,'-'));
+    selectedPersonas.push({
+      id,
+      name,
+      profession: asText(item.broaderPreferredLabel) || name,
+      seniority: "General",
+      summary: "",
+      goals: [],
+      pain_points: [],
+      tone: "Professional, clear, evidence-oriented",
+      vocabulary: [],
+      tools: [],
+      core_tasks: [],
+      skills: [],
+      tags: [],
+      mappings: { esco_occupation: item.uri || "", onetsoc: "" },
+      sample_prompts: [],
+      dos: ["Cite evidence", "Show alternatives", "Prefer plain language"],
+      donts: ["Speculate without data", "Overfit to one stakeholder"]
     });
-    right.appendChild(btn);
-    row.appendChild(left);
-    row.appendChild(right);
-    el.results.appendChild(row);
-  });
+  } finally {
+    updatePreview(); // updates Export enabled state too
+    btn.disabled = false;
+  }
+});
+
 }
 
 function updatePreview(){
   el.selCount.textContent = selectedPersonas.length ? `(${selectedPersonas.length} selected)` : '';
   el.out.textContent = JSON.stringify({ version:1, personas: selectedPersonas }, null, 2);
   el.exportBtn.disabled = selectedPersonas.length === 0;
+
 }
 
 
@@ -322,6 +326,32 @@ async function searchOccupationsFallback(query, limit = 25) {
   }).filter(Boolean);
 }
 
+// ---- Robust JSON fetch with proxy fallback ----
+async function fetchJSONCORS(url, opts = {}) {
+  // First try direct
+  try {
+    const r = await fetch(url, Object.assign({ headers: { "Accept": "application/json" } }, opts));
+    if (!r.ok) throw new Error(`HTTP ${r.status} ${r.statusText}`);
+    return await r.json();
+  } catch (err) {
+    // Then try known CORS-friendly proxies (dev-only)
+    const attempts = [
+      `https://cors.isomorphic-git.org/${url}`,
+      `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`
+    ];
+    for (const proxied of attempts) {
+      try {
+        const r2 = await fetch(proxied, { headers: { "Accept": "application/json" } });
+        const text = await r2.text(); // some proxies return text/plain
+        if (!r2.ok) throw new Error(`Proxy HTTP ${r2.status} ${r2.statusText}`);
+        return JSON.parse(text);
+      } catch (_) { /* try next */ }
+    }
+    throw new Error(`Fetch failed: ${url} :: ${err.message || err}`);
+  }
+}
+
+
 
 function showError(err) {
   const msg = (err && (err.message || err.toString())) || "Unknown error";
@@ -343,16 +373,20 @@ function downloadJS(){
 // Source: ESCO (https://ec.europa.eu/esco/)
 // Generated: ${payload.generated}
 window.PERSONAS = ${JSON.stringify(payload, null, 2)};`;
-  const blob = new Blob([js], { type: 'application/javascript;charset=utf-8' });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = 'personas.data.js';
-  document.body.appendChild(a);
-  a.click();
-  URL.revokeObjectURL(url);
-  a.remove();
-}
+  try {
+    const blob = new Blob([js], { type: 'application/javascript;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'personas.data.js';
+    document.body.appendChild(a);
+    a.click();
+    setTimeout(()=>{ URL.revokeObjectURL(url); a.remove(); }, 0);
+  } catch (e) {
+    console.error('Export failed:', e);
+    alert('Export failed — check console for details.');
+  }
+
 
 // Wire up
 el.search.addEventListener('click', doSearch);
