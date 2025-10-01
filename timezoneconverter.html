@@ -1,0 +1,642 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>DST‑smart Timezone Converter • Arizona‑friendly</title>
+  <style>
+    :root {
+      --bg: #0f172a;        /* slate-900 */
+      --panel: #111827;     /* gray-900 */
+      --muted: #94a3b8;     /* slate-400 */
+      --text: #e5e7eb;      /* gray-200 */
+      --accent: #22d3ee;    /* cyan-400 */
+      --accent-2: #f59e0b;  /* amber-500 */
+      --bad: #f87171;       /* red-400 */
+      --good: #34d399;      /* emerald-400 */
+      --border: #1f2937;    /* gray-800 */
+    }
+    * { box-sizing: border-box; }
+    body { font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, "Apple Color Emoji", "Segoe UI Emoji"; background: var(--bg); color: var(--text); margin: 0; }
+    header { padding: 24px 16px; border-bottom: 1px solid var(--border); position: sticky; top: 0; background: linear-gradient(180deg, rgba(15,23,42,.98), rgba(15,23,42,.92)); backdrop-filter: blur(6px); z-index: 10; }
+    .container { max-width: 1000px; margin: 0 auto; padding: 24px 16px; }
+    h1 { font-size: 22px; margin: 0 0 6px; letter-spacing: .2px; }
+    .sub { color: var(--muted); font-size: 13px; }
+
+    .card { background: var(--panel); border: 1px solid var(--border); border-radius: 14px; padding: 16px; }
+    .grid { display: grid; grid-template-columns: repeat(12, 1fr); gap: 12px; }
+    .row { display: grid; grid-template-columns: 1fr; gap: 10px; }
+    @media (min-width: 860px) { .row { grid-template-columns: 2fr 3fr 2fr; } }
+
+    label { font-size: 12px; color: var(--muted); display: block; margin-bottom: 6px; }
+    input[type="text"], input[type="date"], select { width: 100%; padding: 10px 12px; border-radius: 10px; border: 1px solid var(--border); background: #0b1220; color: var(--text); outline: none; }
+    input::placeholder { color: #6b7280; }
+    .inline { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
+    .btn { cursor: pointer; border: 1px solid var(--border); background: #0b1220; color: #e5e7eb; padding: 10px 14px; border-radius: 12px; font-weight: 600; }
+    .btn.primary { background: var(--accent); color: #002b31; border-color: transparent; }
+    .btn.warn { background: var(--bad); color: #2b0a0a; border-color: transparent; }
+    .btn.ghost { background: transparent; }
+
+    .kicker { font-size: 11px; color: var(--muted); }
+    .pill { display: inline-flex; align-items: center; gap: 6px; padding: 6px 10px; border-radius: 999px; border: 1px solid var(--border); background: #0b1220; font-size: 12px; color: var(--muted); }
+    .divider { height: 1px; background: var(--border); margin: 16px 0; }
+
+    .output { display: grid; gap: 14px; }
+    .panel { border: 1px solid var(--border); border-radius: 12px; padding: 12px; background: #0b1220; }
+    .panel h3 { margin: 0 0 4px; font-size: 14px; }
+    .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace; font-size: 13px; }
+
+    .hint { color: var(--accent-2); font-size: 12px; }
+    .danger { color: var(--bad); }
+    .success { color: var(--good); }
+
+    .chips { display: flex; gap: 8px; flex-wrap: wrap; }
+    .chip { padding: 6px 10px; border-radius: 999px; border: 1px solid var(--border); background: #fff; cursor: pointer; font-size: 12px; }
+    .muted { color: var(--muted); }
+    footer { color: var(--muted); font-size: 12px; padding: 24px 16px 40px; border-top: 1px solid var(--border); }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="container">
+      <h1>UTC sanity: DST‑smart timezone converter</h1>
+      <div class="sub">Reads sloppy labels like “PST” and figures out whether it’s actually PDT right now. Always compares to <strong>Arizona (America/Phoenix, UTC−7)</strong>.</div>
+    </div>
+  </header>
+
+  <main class="container">
+    <section class="card" id="controls">
+      <div class="row">
+        <div>
+          <label for="inputTime">Given time</label>
+          <input id="inputTime" type="text" placeholder="1:00 PM or 13:30" />
+          <div class="kicker">Loose parsing supported: “1pm”, “9:05a”, “1730”.</div>
+        </div>
+        <div>
+          <label for="inputDate">Date</label>
+          <input id="inputDate" type="date" />
+          <div class="kicker">Defaults to today for DST correctness.</div>
+        </div>
+        <div>
+          <label for="zoneText">Their zone (text)</label>
+          <input id="zoneText" type="text" placeholder="PST, CST, ET, Arizona, UTC, London…" />
+          <div class="kicker">Understands US abbreviations and common names. Ambiguous inputs will offer choices.</div>
+        </div>
+      </div>
+
+      <div class="divider"></div>
+
+      <div class="row">
+        <div>
+          <label for="zoneSelect">…or choose IANA time zone</label>
+          <select id="zoneSelect"></select>
+          <div class="kicker">List shows common abbreviation cues, e.g. America/Chicago (CT • CST/CDT).</div>
+        </div>
+        <div>
+          <label>&nbsp;</label>
+          <div class="inline">
+            <button class="btn" id="useNow">Use now in chosen zone</button>
+            <label class="pill"><input type="checkbox" id="smartUS" checked />&nbsp;Smart‑interpret US “PST/EST/etc.”</label>
+          </div>
+          <div class="kicker">If someone writes “PST” in July, we treat it as Pacific time (PDT under the hood) unless you uncheck this.</div>
+        </div>
+        <div>
+          <label>&nbsp;</label>
+          <div class="inline">
+            <button class="btn primary" id="convertBtn">Convert</button>
+            <button class="btn ghost" id="shareBtn">Copy shareable link</button>
+          </div>
+          <div id="warn" class="hint"></div>
+        </div>
+      </div>
+
+      <div class="divider"></div>
+
+      <div>
+        <div class="chips" id="quickChips"></div>
+        <div class="kicker">Quick picks. These honor DST automatically.</div>
+      </div>
+    </section>
+
+    <section class="output" id="output" style="margin-top:16px;">
+      <div class="panel">
+        <h3>Interpretation</h3>
+        <div id="interpretation" class="mono muted">Waiting for input…</div>
+      </div>
+      <div class="panel">
+        <h3>UTC</h3>
+        <div class="mono" id="utcOut">—</div>
+        <div class="inline" style="margin-top:8px;">
+          <button class="btn" id="copyUTC">Copy UTC</button>
+        </div>
+      </div>
+      <div class="panel">
+        <h3>Their local time</h3>
+        <div class="mono" id="theirOut">—</div>
+      </div>
+      <div class="panel">
+        <h3>Arizona (America/Phoenix)</h3>
+        <div class="mono" id="azOut">—</div>
+      </div>
+      <div class="panel">
+        <h3>Gap</h3>
+        <div class="mono" id="gapOut">—</div>
+      </div>
+      <div class="panel">
+        <h3>Live now</h3>
+        <div class="mono" id="nowOut">—</div>
+      </div>
+    </section>
+  </main>
+
+  <footer class="container">
+    Pro‑tips: 
+    <ul>
+      <li>If someone writes “PST” in summer, that usually means PDT. This tool auto‑fixes that under <span class="pill">Smart‑interpret US</span>.</li>
+      <li>Abbreviations are messy: “CST” could be US Central, China, or Cuba. We’ll offer quick choices when that happens.</li>
+      <li>Use the share button to copy a link with your inputs prefilled.</li>
+    </ul>
+  </footer>
+
+  <script>
+    // --- Constants & mappings ----------------------------------------------
+    const AZ_TZ = 'America/Phoenix';
+
+    const US_ABBREV = {
+      'PT': 'America/Los_Angeles', 'PST': 'America/Los_Angeles', 'PDT': 'America/Los_Angeles', 'PACIFIC': 'America/Los_Angeles', 'LA': 'America/Los_Angeles',
+      'MT': 'America/Denver', 'MST': 'America/Denver', 'MDT': 'America/Denver', 'MOUNTAIN': 'America/Denver', 'DENVER': 'America/Denver',
+      'CT': 'America/Chicago', 'CST': 'America/Chicago', 'CDT': 'America/Chicago', 'CENTRAL': 'America/Chicago', 'CHICAGO': 'America/Chicago',
+      'ET': 'America/New_York', 'EST': 'America/New_York', 'EDT': 'America/New_York', 'EASTERN': 'America/New_York', 'NYC': 'America/New_York',
+      'AK': 'America/Anchorage', 'AKST': 'America/Anchorage', 'AKDT': 'America/Anchorage', 'ALASKA': 'America/Anchorage',
+      'HST': 'Pacific/Honolulu', 'HDT': 'Pacific/Honolulu', 'HAWAII': 'Pacific/Honolulu', 'HONOLULU': 'Pacific/Honolulu',
+      'AZ': AZ_TZ, 'ARIZONA': AZ_TZ, 'PHOENIX': AZ_TZ,
+      'UTC': 'UTC', 'GMT': 'UTC', 'Z': 'UTC',
+      'LONDON': 'Europe/London', 'BST': 'Europe/London'
+    };
+
+    // Abbreviations that map to multiple places
+    const AMBIGUOUS = {
+      'CST': ['America/Chicago', 'Asia/Shanghai', 'America/Havana'],
+      'IST': ['Asia/Kolkata', 'Europe/Dublin', 'Asia/Jerusalem'],
+      'BST': ['Europe/London', 'Asia/Dhaka']
+    };
+
+    // Region short labels for select hints
+    const REGION_SHORT = {
+      'America/Los_Angeles': 'PT',
+      'America/Denver': 'MT',
+      'America/Chicago': 'CT',
+      'America/New_York': 'ET',
+      'America/Phoenix': 'Arizona',
+      'America/Anchorage': 'AK',
+      'Pacific/Honolulu': 'HST',
+      'Europe/London': 'UK'
+    };
+
+    const QUICK = [
+      { label: 'Pacific (PT)', tz: 'America/Los_Angeles' },
+      { label: 'Mountain (MT)', tz: 'America/Denver' },
+      { label: 'Central (CT)', tz: 'America/Chicago' },
+      { label: 'Eastern (ET)', tz: 'America/New_York' },
+      { label: 'Arizona (no DST)', tz: AZ_TZ },
+      { label: 'Alaska', tz: 'America/Anchorage' },
+      { label: 'Hawaii', tz: 'Pacific/Honolulu' },
+      { label: 'London', tz: 'Europe/London' },
+      { label: 'UTC', tz: 'UTC' }
+    ];
+
+    // --- Helpers ------------------------------------------------------------
+    function pad(n) { return String(n).padStart(2, '0'); }
+    function fmtISODate(y,m,d) { return `${y}-${pad(m)}-${pad(d)}`; }
+
+    function parseTimeString(str) {
+      if (!str) return null;
+      str = String(str).trim().toLowerCase();
+      if (/^\d{3,4}$/.test(str)) { // 1730 -> 17:30
+        const s = str.padStart(4, '0');
+        return { h: +s.slice(0,2), m: +s.slice(2) };
+      }
+      const m = str.match(/^(\d{1,2})(?::(\d{2}))?\s*([ap]m)?$/i);
+      if (m) {
+        let h = parseInt(m[1],10);
+        const min = m[2] ? parseInt(m[2],10) : 0;
+        const ampm = m[3];
+        if (ampm) {
+          if (ampm.toLowerCase()==='pm' && h !== 12) h += 12;
+          if (ampm.toLowerCase()==='am' && h === 12) h = 0;
+        }
+        if (h>=0 && h<24 && min>=0 && min<60) return { h, m: min };
+      }
+      return null;
+    }
+
+    function supportedTimeZones() {
+      if (Intl.supportedValuesOf) {
+        try { return Intl.supportedValuesOf('timeZone'); } catch { /* noop */ }
+      }
+      return [
+        'UTC','America/Phoenix','America/Los_Angeles','America/Denver','America/Chicago','America/New_York','America/Anchorage','Pacific/Honolulu',
+        'Europe/London','Europe/Paris','Asia/Tokyo','Asia/Shanghai','Asia/Kolkata'
+      ];
+    }
+
+    function tzAbbrevAt(epochMs, tz) {
+      const fmt = new Intl.DateTimeFormat('en-US', { timeZone: tz, timeZoneName: 'short' });
+      const parts = fmt.formatToParts(epochMs);
+      const tzn = parts.find(p => p.type === 'timeZoneName');
+      return tzn ? tzn.value : '';
+    }
+
+    function tzOffsetMinutesAt(epochMs, tz) {
+      const fmt = new Intl.DateTimeFormat('en-US', { timeZone: tz, timeZoneName: 'shortOffset' });
+      const parts = fmt.formatToParts(epochMs);
+      const tzn = parts.find(p => p.type === 'timeZoneName');
+      if (!tzn) return 0;
+      const m = tzn.value.match(/GMT([+-])(\d{1,2})(?::(\d{2}))?/);
+      if (!m) return 0;
+      const sign = m[1] === '-' ? -1 : 1;
+      const h = parseInt(m[2]||'0', 10);
+      const mm = parseInt(m[3]||'0', 10);
+      return sign * (h*60 + mm);
+    }
+
+    function isDST(epochMs, tz) {
+      const d = new Date(epochMs);
+      const year = d.getUTCFullYear();
+      const jan = Date.UTC(year, 0, 1, 12, 0);
+      const jul = Date.UTC(year, 6, 1, 12, 0);
+      const offNow = tzOffsetMinutesAt(epochMs, tz);
+      const offJan = tzOffsetMinutesAt(jan, tz);
+      const offJul = tzOffsetMinutesAt(jul, tz);
+      const standard = Math.max(offJan, offJul);
+      return offNow < standard;
+    }
+
+    function toEpochFromLocal(y, m, d, h, min, tz) {
+      let guess = Date.UTC(y, m-1, d, h, min);
+      for (let i=0;i<3;i++) {
+        const off = tzOffsetMinutesAt(guess, tz);
+        const candidate = Date.UTC(y, m-1, d, h, min) - off*60*1000;
+        if (Math.abs(candidate - guess) < 1000) { guess = candidate; break; }
+        guess = candidate;
+      }
+      return guess;
+    }
+
+    function fmt(epochMs, tz, withTZ=true) {
+      const f = new Intl.DateTimeFormat('en-US', {
+        timeZone: tz,
+        year: 'numeric', month: '2-digit', day: '2-digit',
+        hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true,
+        timeZoneName: withTZ ? 'short' : undefined
+      });
+      return f.format(epochMs);
+    }
+
+    function fmtUTC(epochMs) {
+      const d = new Date(epochMs);
+      return `${d.getUTCFullYear()}-${pad(d.getUTCMonth()+1)}-${pad(d.getUTCDate())}T${pad(d.getUTCHours())}:${pad(d.getUTCMinutes())}:${pad(d.getUTCSeconds())}Z`;
+    }
+
+    function diffHours(epochMs, tzA, tzB) {
+      const offA = tzOffsetMinutesAt(epochMs, tzA);
+      const offB = tzOffsetMinutesAt(epochMs, tzB);
+      return (offB - offA) / 60;
+    }
+
+    // Normalize user text into a zone, using Smart US rules
+    function normalizeZoneText(raw, smartUS=true) {
+      if (!raw) return null;
+      const s = raw.trim().toUpperCase();
+
+      // First: common US names/aliases
+      if (US_ABBREV[s]) return { tz: US_ABBREV[s] };
+
+      // Ambiguous tokens
+      if (AMBIGUOUS[s]) {
+        if (smartUS && s === 'CST') {
+          // Default to US Central but offer alternates
+          return { tz: 'America/Chicago', alsoCandidates: AMBIGUOUS[s] };
+        }
+        if (smartUS && s === 'BST') {
+          return { tz: 'Europe/London', alsoCandidates: AMBIGUOUS[s] };
+        }
+        if (smartUS && s === 'IST') {
+          return { tz: 'Asia/Kolkata', alsoCandidates: AMBIGUOUS[s] };
+        }
+        return { ambiguous: true, candidates: AMBIGUOUS[s] };
+      }
+
+      // Loose names
+      if (s.includes('ARIZ')) return { tz: AZ_TZ };
+      if (s.includes('PACIFIC')) return { tz: 'America/Los_Angeles' };
+      if (s.includes('MOUNTAIN')) return { tz: 'America/Denver' };
+      if (s.includes('CENTRAL')) return { tz: 'America/Chicago' };
+      if (s.includes('EASTERN')) return { tz: 'America/New_York' };
+
+      // Direct IANA match or partial contains
+      const zones = supportedTimeZones();
+      const exact = zones.find(z => z.toUpperCase() === s);
+      if (exact) return { tz: exact };
+      const partial = zones.find(z => z.toUpperCase().includes(s));
+      if (partial) return { tz: partial };
+      return null;
+    }
+
+    // Build select options with helpful abbreviation hints
+    function setSelectOptions(select) {
+      const zones = supportedTimeZones();
+
+      // Compute abbreviations for the selected date (or today)
+      let epochMs = Date.now();
+      const dateEl = document.getElementById('inputDate');
+      if (dateEl && dateEl.value) {
+        const [Y, M, D] = dateEl.value.split('-').map(Number);
+        epochMs = Date.UTC(Y, M - 1, D, 12, 0);
+      }
+
+      const abbrHint = (tz) => {
+        const year = new Date(epochMs).getUTCFullYear();
+        const jan = Date.UTC(year, 0, 1, 12, 0);
+        const jul = Date.UTC(year, 6, 1, 12, 0);
+        const set = new Set([
+          tzAbbrevAt(jan, tz),
+          tzAbbrevAt(jul, tz),
+          tzAbbrevAt(epochMs, tz)
+        ].filter(Boolean));
+        const joined = Array.from(set).join('/');
+        const region = REGION_SHORT[tz] ? REGION_SHORT[tz] + ' • ' : '';
+        const az = tz === AZ_TZ && !REGION_SHORT[tz] ? 'Arizona • ' : '';
+        const inside = [region || az ? (region || az) : '', joined].filter(Boolean).join('');
+        return inside ? ` (${inside})` : '';
+      };
+
+      const prev = select.value;
+      select.innerHTML = '';
+      const optEmpty = document.createElement('option');
+      optEmpty.value = '';
+      optEmpty.textContent = '— select a time zone —';
+      select.appendChild(optEmpty);
+
+      zones.forEach(z => {
+        const o = document.createElement('option');
+        o.value = z; o.textContent = z + abbrHint(z);
+        select.appendChild(o);
+      });
+
+      if (prev) select.value = prev;
+    }
+
+    function setQuickChips() {
+      const wrap = document.getElementById('quickChips');
+      QUICK.forEach(q => {
+        const b = document.createElement('button');
+        b.className = 'chip';
+        b.textContent = q.label;
+        b.addEventListener('click', () => {
+          document.getElementById('zoneSelect').value = q.tz;
+          compute(true);
+        });
+        wrap.appendChild(b);
+      });
+    }
+
+    function readInputs() {
+      const t = document.getElementById('inputTime').value.trim();
+      const dateStr = document.getElementById('inputDate').value;
+      const zoneText = document.getElementById('zoneText').value.trim();
+      const zoneSel = document.getElementById('zoneSelect').value;
+      const smartUS = document.getElementById('smartUS').checked;
+      const tm = parseTimeString(t);
+      return { tm, dateStr, zoneText, zoneSel, smartUS };
+    }
+
+    function showWarn(msg, cls='hint') {
+      const el = document.getElementById('warn');
+      el.textContent = msg || '';
+      el.className = cls;
+    }
+
+    function compute(useNow=false) {
+      showWarn('');
+      const outInterp = document.getElementById('interpretation');
+      const outUTC = document.getElementById('utcOut');
+      const outTheir = document.getElementById('theirOut');
+      const outAZ = document.getElementById('azOut');
+      const outGap = document.getElementById('gapOut');
+
+      const { tm, dateStr, zoneText, zoneSel, smartUS } = readInputs();
+      let tz = zoneSel || null;
+      let ambiguous = null;
+      let also = null;
+
+      if (!tz && zoneText) {
+        const norm = normalizeZoneText(zoneText, smartUS);
+        if (norm && norm.ambiguous) {
+          ambiguous = norm.candidates;
+        } else if (norm && norm.tz) {
+          tz = norm.tz;
+          also = norm.alsoCandidates || norm.also || null;
+        }
+      }
+
+      if (!tz && !ambiguous) {
+        outInterp.textContent = 'Enter a time and zone (or pick from the list).';
+        outUTC.textContent = outTheir.textContent = outAZ.textContent = outGap.textContent = '—';
+        return;
+      }
+
+      // Resolve ambiguity by offering clickable options
+      if (ambiguous) {
+        let epochMs = Date.now();
+        if (dateStr) {
+          const [Y, M, D] = dateStr.split('-').map(n=>parseInt(n,10));
+          epochMs = Date.UTC(Y, M-1, D, 12, 0);
+        }
+        const labelFor = (tz) => {
+          const year = new Date(epochMs).getUTCFullYear();
+          const jan = Date.UTC(year, 0, 1, 12, 0);
+          const jul = Date.UTC(year, 6, 1, 12, 0);
+          const set = new Set([
+            tzAbbrevAt(jan, tz),
+            tzAbbrevAt(jul, tz),
+            tzAbbrevAt(epochMs, tz)
+          ].filter(Boolean));
+          const ab = Array.from(set).join('/');
+          return ab ? `${tz} (${ab})` : tz;
+        };
+        outInterp.innerHTML = 'Input is ambiguous. Click the exact zone:';
+        const wrap = document.createElement('div');
+        wrap.className = 'chips';
+        ambiguous.forEach(z => {
+          const b = document.createElement('button');
+          b.className = 'chip';
+          b.textContent = labelFor(z);
+          b.addEventListener('click', () => {
+            document.getElementById('zoneSelect').value = z;
+            compute(false);
+          });
+          wrap.appendChild(b);
+        });
+        outInterp.appendChild(wrap);
+        showWarn('Ambiguous abbreviation; choose a specific zone to continue.', 'hint');
+        outUTC.textContent = outTheir.textContent = outAZ.textContent = outGap.textContent = '—';
+        return;
+      }
+
+      // Date
+      let y, m, d;
+      if (dateStr) {
+        const [Y,M,D] = dateStr.split('-').map(n=>parseInt(n,10));
+        y = Y; m = M; d = D;
+      } else {
+        const now = new Date();
+        y = now.getFullYear(); m = now.getMonth()+1; d = now.getDate();
+        document.getElementById('inputDate').value = fmtISODate(y,m,d);
+      }
+
+      // Time
+      let hour = 13, minute = 0; // default 1:00 PM
+      if (useNow && tz) {
+        const now = Date.now();
+        const parts = new Intl.DateTimeFormat('en-US', { timeZone: tz, hour12: false, hour: '2-digit', minute: '2-digit' }).formatToParts(now);
+        hour = parseInt(parts.find(p=>p.type==='hour').value,10);
+        minute = parseInt(parts.find(p=>p.type==='minute').value,10);
+        document.getElementById('inputTime').value = `${hour}:${pad(minute)}`;
+      } else if (tm) {
+        hour = tm.h; minute = tm.m;
+      } else {
+        document.getElementById('inputTime').value = '1:00 PM';
+      }
+
+      const epoch = toEpochFromLocal(y,m,d,hour,minute,tz);
+
+      const abbr = tzAbbrevAt(epoch, tz);
+      const offMin = tzOffsetMinutesAt(epoch, tz);
+      const offSign = offMin >= 0 ? '+' : '-';
+      const offHH = pad(Math.floor(Math.abs(offMin)/60));
+      const offMM = pad(Math.abs(offMin)%60);
+      const dst = isDST(epoch, tz);
+
+      let interp = `Interpreted zone: ${tz}  |  Abbrev on this date: ${abbr}  |  UTC offset: ${offSign}${offHH}:${offMM}  |  DST: ${dst ? 'yes' : 'no'}`;
+      outInterp.textContent = interp;
+
+      // If we auto-chose a default for an ambiguous token, show optional alternatives as chips
+      if (also && Array.isArray(also)) {
+        const wrap = document.createElement('div');
+        wrap.className = 'chips';
+        also.forEach(z => {
+          if (z === tz) return;
+          const b = document.createElement('button');
+          b.className = 'chip';
+          b.textContent = z;
+          b.addEventListener('click', () => {
+            document.getElementById('zoneSelect').value = z;
+            compute(false);
+          });
+          wrap.appendChild(b);
+        });
+        const p = document.createElement('div');
+        p.className = 'kicker';
+        p.textContent = 'Alternate matches:';
+        outInterp.appendChild(document.createElement('br'));
+        outInterp.appendChild(p);
+        outInterp.appendChild(wrap);
+      }
+
+      // Label mismatch warnings
+      const raw = (document.getElementById('zoneText').value||'').trim().toUpperCase();
+      if (raw && ['PST','PDT','EST','EDT','CST','CDT','MST','MDT'].includes(raw)) {
+        const looksDST = /(DT)$/.test(raw);
+        if (dst !== looksDST && (raw.endsWith('ST') || raw.endsWith('DT'))) {
+          showWarn(`Heads‑up: you entered “${raw}”, but on ${fmtISODate(y,m,d)} that region is actually ${dst ? 'daylight' : 'standard'} time (${abbr}).`);
+        }
+      }
+
+      // Outputs
+      const utc = epoch;
+      outUTC.textContent = `${fmtUTC(utc)} (UTC)`;
+
+      outTheir.textContent = `${fmt(epoch, tz)}  [${tz}]`;
+      const azFmt = fmt(epoch, AZ_TZ);
+      outAZ.textContent = `${azFmt}  [${AZ_TZ}]`;
+
+      const gap = diffHours(epoch, tz, AZ_TZ);
+      const gapStr = gap === 0 ? 'Same time right now.' : `Arizona is ${gap>0?'+':''}${gap.toFixed(1)} hours relative to ${tz}.`;
+      outGap.innerHTML = gap===0 ? `<span class="success">${gapStr}</span>` : gapStr;
+
+      updateNow();
+      updateShareLink({ time: document.getElementById('inputTime').value, date: fmtISODate(y,m,d), tz });
+    }
+
+    function updateNow() {
+      const out = document.getElementById('nowOut');
+      const sel = document.getElementById('zoneSelect').value || 'UTC';
+      const now = Date.now();
+      const a = fmt(now, sel);
+      const b = fmt(now, AZ_TZ);
+      out.textContent = `${a}  [${sel}]   |   ${b}  [${AZ_TZ}]`;
+    }
+
+    let shareState = { time: '', date: '', tz: '' };
+    function updateShareLink(st) { shareState = st; }
+
+    function copyShare() {
+      const url = new URL(location.href);
+      url.searchParams.set('time', shareState.time);
+      url.searchParams.set('date', shareState.date);
+      url.searchParams.set('tz', shareState.tz);
+      navigator.clipboard.writeText(url.toString()).then(()=>{
+        showWarn('Share link copied to clipboard.', 'success');
+      }).catch(()=>{
+        showWarn('Unable to copy link.', 'danger');
+      });
+    }
+
+    function copyUTC() {
+      const txt = document.getElementById('utcOut').textContent;
+      navigator.clipboard.writeText(txt).then(()=>{
+        showWarn('UTC timestamp copied.', 'success');
+      }).catch(()=>{
+        showWarn('Could not copy UTC.', 'danger');
+      });
+    }
+
+    function hydrateFromQuery() {
+      const q = new URLSearchParams(location.search);
+      const time = q.get('time');
+      const date = q.get('date');
+      const tz = q.get('tz');
+      if (time) document.getElementById('inputTime').value = time;
+      if (date) document.getElementById('inputDate').value = date;
+      if (tz) {
+        document.getElementById('zoneSelect').value = tz;
+        if (!document.getElementById('zoneSelect').value) {
+          document.getElementById('zoneText').value = tz;
+        }
+      }
+    }
+
+    // --- init ---------------------------------------------------------------
+    setSelectOptions(document.getElementById('zoneSelect'));
+    setQuickChips();
+    document.getElementById('convertBtn').addEventListener('click', ()=>compute(false));
+    document.getElementById('useNow').addEventListener('click', ()=>compute(true));
+    document.getElementById('shareBtn').addEventListener('click', copyShare);
+    document.getElementById('copyUTC').addEventListener('click', copyUTC);
+
+    // Rebuild dropdown labels when date changes (so CST/CDT, GMT/BST, etc. show correctly)
+    document.getElementById('inputDate').addEventListener('change', ()=> setSelectOptions(document.getElementById('zoneSelect')));
+
+    // Update live clock every second
+    setInterval(updateNow, 1000);
+
+    // Prefill date to today
+    const now = new Date();
+    document.getElementById('inputDate').value = fmtISODate(now.getFullYear(), now.getMonth()+1, now.getDate());
+
+    hydrateFromQuery();
+    updateNow();
+  </script>
+</body>
+</html>
