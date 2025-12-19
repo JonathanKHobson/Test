@@ -1,0 +1,1781 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Scrabble Tile Drawer</title>
+  <style>
+    :root{
+      --bg: #0b1020;
+      --panel: rgba(0,0,0,.18);
+      --border: rgba(255,255,255,.10);
+      --border2: rgba(255,255,255,.14);
+      --text: #e5e7eb;
+      --muted: #94a3b8;
+      --focus: #60a5fa;
+      --danger: #ef4444;
+      --ok: #22c55e;
+
+      --tile: #e9d6b0;
+      --tileEdge: #b6935e;
+      --tileShadow: rgba(0,0,0,.35);
+    }
+
+    *{ box-sizing:border-box; }
+    html,body{ height:100%; }
+    body{
+      margin:0;
+      font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial;
+      background: radial-gradient(1200px 800px at 20% 0%, #1e293b 0%, #0b1020 55%, #050815 100%);
+      color: var(--text);
+      min-height: 100vh;
+      padding: 16px;
+    }
+
+    svg.icon{
+      width: 18px;
+      height: 18px;
+      display: inline-block;
+      vertical-align: -3px;
+      fill: currentColor;
+    }
+    button.icon svg.icon{
+      width: 18px;
+      height: 18px;
+      vertical-align: 0;
+    }
+
+    .app{
+      width: 100%;
+      max-width: 1760px;
+      margin: 0 auto;
+      background: linear-gradient(180deg, rgba(255,255,255,.04), rgba(255,255,255,.01));
+      border: 1px solid rgba(255,255,255,.08);
+      border-radius: 18px;
+      box-shadow: 0 20px 60px rgba(0,0,0,.35);
+      overflow: hidden;
+    }
+
+    header{
+      padding: 18px 20px;
+      display:flex;
+      align-items:flex-start;
+      justify-content: space-between;
+      gap: 14px;
+      background: rgba(0,0,0,.18);
+      border-bottom: 1px solid rgba(255,255,255,.08);
+    }
+    header h1{
+      margin:0;
+      font-size: 18px;
+      letter-spacing: .2px;
+      display:flex;
+      align-items:center;
+      gap: 10px;
+    }
+    header h1 .badge{
+      font-size: 12px;
+      padding: 3px 8px;
+      border-radius: 999px;
+      color: #0b1224;
+      background: rgba(96,165,250,.95);
+    }
+    header p{
+      margin:6px 0 0;
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.35;
+      max-width: 95ch;
+    }
+
+    .toggle{
+      display:flex;
+      align-items:center;
+      gap: 10px;
+      font-size: 13px;
+      color: var(--muted);
+      user-select: none;
+      white-space: nowrap;
+    }
+    .toggle input{
+      width: 42px;
+      height: 24px;
+      appearance: none;
+      background: rgba(255,255,255,.10);
+      border: 1px solid rgba(255,255,255,.14);
+      border-radius: 999px;
+      position: relative;
+      outline: none;
+      cursor: pointer;
+      transition: background .15s ease, border-color .15s ease;
+    }
+    .toggle input:focus{
+      box-shadow: 0 0 0 4px rgba(96,165,250,.18);
+      border-color: rgba(96,165,250,.65);
+    }
+    .toggle input::after{
+      content:"";
+      position:absolute;
+      top: 2px;
+      left: 2px;
+      width: 18px;
+      height: 18px;
+      border-radius: 50%;
+      background: rgba(255,255,255,.85);
+      transition: transform .15s ease;
+    }
+    .toggle input:checked{
+      background: rgba(96,165,250,.35);
+      border-color: rgba(96,165,250,.55);
+    }
+    .toggle input:checked::after{
+      transform: translateX(18px);
+    }
+
+    .content{ padding: 18px; display:grid; gap: 14px; }
+
+    .controls{
+      display:flex;
+      flex-wrap: wrap;
+      gap: 12px 16px;
+      align-items: flex-end;
+      justify-content: space-between;
+    }
+    .field{ display:grid; gap: 6px; min-width: 260px; }
+    label{ font-size: 12px; color: var(--muted); }
+
+    input[type="number"]{
+      width: 280px;
+      max-width: 100%;
+      padding: 10px 12px;
+      border-radius: 12px;
+      border: 1px solid rgba(255,255,255,.15);
+      background: rgba(0,0,0,.25);
+      color: var(--text);
+      outline: none;
+      font-size: 14px;
+    }
+    input[type="number"]:focus{
+      border-color: rgba(96,165,250,.8);
+      box-shadow: 0 0 0 4px rgba(96,165,250,.18);
+    }
+
+    .btns{ display:flex; gap: 10px; flex-wrap: wrap; }
+
+    button{
+      border: 1px solid rgba(255,255,255,.14);
+      background: rgba(255,255,255,.07);
+      color: var(--text);
+      padding: 10px 14px;
+      border-radius: 12px;
+      cursor: pointer;
+      font-size: 14px;
+      display:inline-flex;
+      gap: 8px;
+      align-items:center;
+      transition: transform .04s ease, background .15s ease, border-color .15s ease;
+      user-select: none;
+    }
+    button:hover{ background: rgba(255,255,255,.10); border-color: rgba(255,255,255,.22); }
+    button:active{ transform: translateY(1px); }
+    button.primary{
+      background: rgba(34,197,94,.15);
+      border-color: rgba(34,197,94,.35);
+    }
+    button.primary:hover{
+      background: rgba(34,197,94,.22);
+      border-color: rgba(34,197,94,.45);
+    }
+    button.danger{
+      background: rgba(239,68,68,.12);
+      border-color: rgba(239,68,68,.30);
+    }
+    button.danger:hover{
+      background: rgba(239,68,68,.18);
+      border-color: rgba(239,68,68,.40);
+    }
+    button.small{
+      padding: 8px 10px;
+      font-size: 12px;
+      border-radius: 10px;
+    }
+    button.icon{
+      padding: 8px 10px;
+      border-radius: 10px;
+      font-size: 14px;
+      line-height: 1;
+      gap: 0;
+    }
+
+    .meta{
+      display:flex;
+      flex-wrap: wrap;
+      gap: 10px 16px;
+      align-items:center;
+      justify-content: space-between;
+      padding: 12px 14px;
+      border-radius: 14px;
+      border: 1px solid rgba(255,255,255,.08);
+      background: rgba(0,0,0,.20);
+    }
+    .status{
+      font-size: 13px;
+      color: var(--muted);
+      display:flex;
+      gap: 10px;
+      align-items:center;
+      flex-wrap: wrap;
+    }
+    .pill{
+      display:inline-flex;
+      align-items:center;
+      gap: 8px;
+      padding: 5px 10px;
+      border-radius: 999px;
+      border: 1px solid rgba(255,255,255,.10);
+      background: rgba(255,255,255,.06);
+      color: var(--text);
+      font-size: 12px;
+    }
+    .pill strong{ font-weight: 800; }
+
+    .error{
+      display:none;
+      padding: 10px 12px;
+      border-radius: 12px;
+      border: 1px solid rgba(239,68,68,.35);
+      background: rgba(239,68,68,.12);
+      color: #fecaca;
+      font-size: 13px;
+      line-height: 1.3;
+    }
+    .error.show{ display:block; }
+
+    .main{
+      display:grid;
+      grid-template-columns: 1fr 1.15fr;
+      gap: 14px;
+      align-items: start;
+    }
+    @media (max-width: 1000px){
+      .main{ grid-template-columns: 1fr; }
+    }
+
+    .left{ display:grid; gap: 12px; }
+    .right{ display:grid; gap: 12px; }
+
+    .panel{
+      border-radius: 16px;
+      border: 1px solid rgba(255,255,255,.08);
+      background: rgba(0,0,0,.18);
+      padding: 12px;
+      display:grid;
+      gap: 10px;
+    }
+
+    .panel-head{
+      display:flex;
+      align-items:flex-start;
+      justify-content: space-between;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+    .panel-head .title{
+      font-size: 12px;
+      color: var(--muted);
+      display:flex;
+      align-items:center;
+      gap: 8px;
+      user-select: none;
+    }
+    .panel-head .meta-line{
+      font-size: 12px;
+      color: var(--text);
+      border: 1px solid rgba(255,255,255,.10);
+      background: rgba(255,255,255,.06);
+      padding: 3px 8px;
+      border-radius: 999px;
+      white-space: nowrap;
+    }
+
+    .tiles{
+      display:grid;
+      grid-template-columns: repeat(auto-fit, minmax(66px, 1fr));
+      gap: 12px;
+      align-items: start;
+    }
+
+    .textout{
+      width: 100%;
+      min-height: 92px;
+      resize: vertical;
+      padding: 10px 12px;
+      border-radius: 12px;
+      border: 1px solid rgba(255,255,255,.12);
+      background: rgba(0,0,0,.20);
+      color: var(--text);
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Courier New", monospace;
+      font-size: 12px;
+      line-height: 1.35;
+      outline: none;
+    }
+    .textout:focus{
+      border-color: rgba(96,165,250,.65);
+      box-shadow: 0 0 0 4px rgba(96,165,250,.18);
+    }
+
+    .tile-surface{
+      display:flex;
+      flex-wrap: wrap;
+      align-content: flex-start;
+      gap: 10px;
+      overflow: auto;
+      padding: 10px;
+      border-radius: 12px;
+      border: 1px dashed rgba(255,255,255,.16);
+      background: rgba(255,255,255,.03);
+    }
+    #rackZone{ min-height: 250px; }
+    #wordZone{ min-height: 340px; }
+
+    .tile-surface.drag-over{
+      border-color: rgba(96,165,250,.65);
+      box-shadow: 0 0 0 4px rgba(96,165,250,.12);
+      background: rgba(96,165,250,.06);
+    }
+
+    .tile{
+      width: 66px;
+      height: 66px;
+      border-radius: 14px;
+      background: linear-gradient(180deg, #f2e2c2 0%, var(--tile) 55%, #d8be8f 100%);
+      border: 2px solid var(--tileEdge);
+      box-shadow:
+        0 10px 18px var(--tileShadow),
+        inset 0 2px 0 rgba(255,255,255,.55),
+        inset 0 -2px 0 rgba(0,0,0,.10);
+      position: relative;
+      display:grid;
+      place-items:center;
+      color: #1f2937;
+      font-weight: 800;
+      letter-spacing: .6px;
+      flex: 0 0 auto;
+      outline: none;
+    }
+    .tile:focus{
+      box-shadow:
+        0 10px 18px var(--tileShadow),
+        inset 0 2px 0 rgba(255,255,255,.55),
+        inset 0 -2px 0 rgba(0,0,0,.10),
+        0 0 0 4px rgba(96,165,250,.22);
+      border-color: rgba(96,165,250,.85);
+    }
+
+    .tile .letter{
+      font-size: 28px;
+      line-height: 1;
+      transform: translateY(-1px);
+      pointer-events: none;
+      user-select: none;
+    }
+    .tile.blank .letter{
+      font-size: 18px;
+      letter-spacing: .2px;
+      font-weight: 700;
+      color: rgba(31,41,55,.65);
+      transform: none;
+    }
+    .tile.blank.assigned .letter{
+      font-size: 28px;
+      letter-spacing: .6px;
+      font-weight: 900;
+      color: rgba(31,41,55,.90);
+      transform: translateY(-1px);
+    }
+    .tile.blank .subhint{
+      position:absolute;
+      left: 8px;
+      bottom: 6px;
+      font-size: 10px;
+      font-weight: 800;
+      color: rgba(31,41,55,.55);
+      pointer-events:none;
+      user-select:none;
+    }
+    .tile .points{
+      position:absolute;
+      right: 8px;
+      bottom: 6px;
+      font-size: 12px;
+      font-weight: 900;
+      color: rgba(31,41,55,.90);
+      pointer-events: none;
+      user-select:none;
+    }
+    .tile.draggable{ cursor: grab; }
+    .tile.draggable:active{ cursor: grabbing; }
+    .tile.dragging{ opacity: .45; transform: scale(.98); }
+
+    .tile[data-letter="Q"] .letter{
+      letter-spacing: .25px;
+      transform: translateY(-1px) translateX(-1px);
+    }
+    .tile[data-letter="Q"] .points{
+      right: 9px;
+      bottom: 6px;
+    }
+
+    .tile.space{
+      background: linear-gradient(180deg, rgba(255,255,255,.16), rgba(255,255,255,.07));
+      border: 2px dashed rgba(255,255,255,.32);
+      box-shadow: 0 10px 18px rgba(0,0,0,.22);
+      color: rgba(229,231,235,.85);
+    }
+    .tile.space .letter{
+      font-size: 18px;
+      letter-spacing: .2px;
+      font-weight: 800;
+      transform: none;
+    }
+
+    .builder-bar{
+      position: sticky;
+      bottom: 0;
+      z-index: 2;
+      display:flex;
+      align-items:center;
+      justify-content: space-between;
+      gap: 10px;
+      flex-wrap: wrap;
+      padding: 10px;
+      border-radius: 12px;
+      border: 1px solid rgba(255,255,255,.08);
+      background: rgba(5,8,21,.75);
+      backdrop-filter: blur(8px);
+    }
+    .builder-bar .group{
+      display:flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      align-items:center;
+    }
+    .builder-bar .hint{
+      font-size: 11px;
+      color: rgba(148,163,184,.95);
+      line-height: 1.2;
+    }
+
+    .bag-drop{
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      min-height: 74px;
+      border-radius: 12px;
+      border: 1px dashed rgba(255,255,255,.16);
+      background: rgba(255,255,255,.03);
+      color: var(--muted);
+      padding: 10px;
+      text-align: center;
+      line-height: 1.25;
+    }
+    .bag-drop.drag-over{
+      border-color: rgba(34,197,94,.55);
+      box-shadow: 0 0 0 4px rgba(34,197,94,.12);
+      background: rgba(34,197,94,.06);
+      color: #bbf7d0;
+    }
+
+    .saved-list{
+      display:grid;
+      gap: 10px;
+      overflow: auto;
+      max-height: 420px;
+      padding-right: 2px;
+    }
+    .saved-list.collapsed{ display:none; }
+
+    .saved-entry{
+      border-radius: 14px;
+      border: 1px solid rgba(255,255,255,.08);
+      background: rgba(255,255,255,.04);
+      padding: 10px;
+      display:grid;
+      gap: 8px;
+    }
+    .saved-entry .top{
+      display:flex;
+      align-items:center;
+      justify-content: space-between;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+    .saved-entry .line{
+      font-size: 14px;
+      color: rgba(229,231,235,.95);
+      letter-spacing: .15px;
+      word-break: break-word;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Courier New", monospace;
+    }
+    .saved-entry .stats{
+      font-size: 12px;
+      color: var(--muted);
+      display:flex;
+      gap: 10px;
+      flex-wrap: wrap;
+      align-items:center;
+    }
+    .saved-entry .actions{
+      display:flex;
+      gap: 8px;
+      align-items:center;
+      justify-content: flex-end;
+    }
+    .saved-entry .actions button.icon{
+      width: 36px;
+      height: 34px;
+      display:inline-grid;
+      place-items:center;
+    }
+
+    .hint{
+      font-size: 12px;
+      color: var(--muted);
+      line-height: 1.35;
+    }
+
+    .sr-only{
+      position:absolute !important;
+      width:1px;height:1px;
+      padding:0;margin:-1px;
+      overflow:hidden;clip:rect(0,0,0,0);
+      white-space:nowrap;border:0;
+    }
+
+    footer{
+      padding: 14px 20px 18px;
+      border-top: 1px solid rgba(255,255,255,.08);
+      background: rgba(0,0,0,.16);
+      color: var(--muted);
+      font-size: 12px;
+      display:flex;
+      flex-wrap: wrap;
+      gap: 10px 18px;
+      justify-content: space-between;
+    }
+    footer code{ color: #cbd5e1; }
+
+    .modal{
+      position: fixed;
+      inset: 0;
+      display: grid;
+      place-items: center;
+      padding: 16px;
+      background: rgba(0,0,0,.55);
+      backdrop-filter: blur(6px);
+      z-index: 1000;
+    }
+    .modal.hidden{ display:none; }
+    .modal-card{
+      width: min(720px, 95vw);
+      border-radius: 18px;
+      border: 1px solid rgba(255,255,255,.12);
+      background: rgba(10,14,32,.95);
+      box-shadow: 0 30px 90px rgba(0,0,0,.5);
+      overflow: hidden;
+    }
+    .modal-head{
+      display:flex;
+      justify-content: space-between;
+      align-items:center;
+      gap: 10px;
+      padding: 14px 16px;
+      border-bottom: 1px solid rgba(255,255,255,.10);
+      background: rgba(0,0,0,.16);
+    }
+    .modal-head h2{
+      margin:0;
+      font-size: 14px;
+      letter-spacing: .2px;
+      color: rgba(229,231,235,.95);
+    }
+    .modal-body{ padding: 14px 16px 10px; }
+    .alphabet-grid{
+      display:grid;
+      grid-template-columns: repeat(13, minmax(0, 1fr));
+      gap: 8px;
+    }
+    @media (max-width: 680px){
+      .alphabet-grid{ grid-template-columns: repeat(9, minmax(0, 1fr)); }
+    }
+    .alpha{
+      padding: 10px 0;
+      border-radius: 12px;
+      border: 1px solid rgba(255,255,255,.12);
+      background: rgba(255,255,255,.06);
+      color: rgba(229,231,235,.95);
+      font-weight: 800;
+      cursor:pointer;
+      user-select:none;
+      text-align:center;
+    }
+    .alpha:hover{
+      background: rgba(96,165,250,.14);
+      border-color: rgba(96,165,250,.30);
+    }
+    .modal-actions{
+      padding: 12px 16px 16px;
+      display:flex;
+      justify-content: space-between;
+      gap: 10px;
+      flex-wrap: wrap;
+      border-top: 1px solid rgba(255,255,255,.10);
+      background: rgba(0,0,0,.10);
+    }
+    .modal-actions .left-actions,
+    .modal-actions .right-actions{
+      display:flex;
+      gap: 10px;
+      flex-wrap: wrap;
+      align-items:center;
+    }
+  </style>
+</head>
+
+<body>
+  <svg width="0" height="0" style="position:absolute; left:-9999px; top:-9999px;" aria-hidden="true" focusable="false">
+    <symbol id="i-dice" viewBox="0 0 24 24">
+      <path d="M7 3h10a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2Zm3 4a1 1 0 1 0 0 2 1 1 0 0 0 0-2Zm4 4a1 1 0 1 0 0 2 1 1 0 0 0 0-2Zm-4 4a1 1 0 1 0 0 2 1 1 0 0 0 0-2Z"/>
+      <path d="M5 9H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h9a2 2 0 0 0 2-2v-1H7a2 2 0 0 1-2-2V9Z" opacity=".9"/>
+    </symbol>
+    <symbol id="i-refresh" viewBox="0 0 24 24">
+      <path d="M20 12a8 8 0 1 1-2.343-5.657" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+      <path d="M20 4v6h-6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+    </symbol>
+    <symbol id="i-clipboard" viewBox="0 0 24 24">
+      <path d="M9 3h6a2 2 0 0 1 2 2v1h1a2 2 0 0 1 2 2v11a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h1V5a2 2 0 0 1 2-2Z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>
+      <path d="M9 6h6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+    </symbol>
+    <symbol id="i-save" viewBox="0 0 24 24">
+      <path d="M5 4h12l3 3v13a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2Z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>
+      <path d="M7 4v6h10V4" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>
+      <path d="M8 20v-7h8v7" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>
+    </symbol>
+    <symbol id="i-undo" viewBox="0 0 24 24">
+      <path d="M9 10H4V5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+      <path d="M4 10c3-5 12-6 16-1 2.5 3 2 8-1.5 10.5-3 2.1-7.2 1.9-10-.5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+    </symbol>
+    <symbol id="i-broom" viewBox="0 0 24 24">
+      <path d="M3 21l4-4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+      <path d="M7 17l5-5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+      <path d="M12 12l7-7 2 2-7 7" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>
+      <path d="M6 18c1.6 1.6 4.3 1.6 5.9 0l.1-.1" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+    </symbol>
+    <symbol id="i-bag" viewBox="0 0 24 24">
+      <path d="M7 8c0-3 2.2-5 5-5s5 2 5 5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+      <path d="M5 8h14l-1.3 13a2 2 0 0 1-2 1.8H8.3a2 2 0 0 1-2-1.8L5 8Z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>
+    </symbol>
+    <symbol id="i-chevron" viewBox="0 0 24 24">
+      <path d="M8 10l4 4 4-4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+    </symbol>
+    <symbol id="i-to-builder" viewBox="0 0 24 24">
+      <path d="M20 11H8" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+      <path d="M12 7l-4 4 4 4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+      <path d="M4 4h4v16H4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+    </symbol>
+    <symbol id="i-to-rack" viewBox="0 0 24 24">
+      <path d="M4 18h16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+      <path d="M6 18l2-10h8l2 10" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>
+      <path d="M12 4v8" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+      <path d="M9 7l3-3 3 3" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+    </symbol>
+    <symbol id="i-close" viewBox="0 0 24 24">
+      <path d="M6 6l12 12M18 6L6 18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+    </symbol>
+  </svg>
+
+  <div class="app" role="application" aria-label="Scrabble tile drawer">
+    <header>
+      <div>
+        <h1>Scrabble Tile Drawer <span class="badge">Browser</span></h1>
+        <p>
+          Drag from <strong>Rack</strong> → <strong>Word Builder</strong>. Drop on another tile to insert before it.
+          Spaces are separators. To remove a space: <strong>double-click</strong> it, press <strong>Delete</strong>,
+          or drop it into <strong>Return to Bag</strong> (deletes).
+        </p>
+      </div>
+      <div class="toggle" title="Keep drawing from the same bag until you reset (default).">
+        <input id="persistentToggle" type="checkbox" aria-label="Persistent bag toggle" checked />
+        <span>Persistent bag</span>
+      </div>
+    </header>
+
+    <div class="content">
+      <div class="controls">
+        <div class="field">
+          <label for="countInput">How many tiles are you drawing?</label>
+          <input id="countInput" type="number" inputmode="numeric" min="1" max="100" step="1" value="7" />
+        </div>
+
+        <div class="btns">
+          <button class="primary" id="drawBtn" type="button" aria-label="Draw tiles">
+            <svg class="icon" aria-hidden="true"><use href="#i-dice"></use></svg>
+            Draw
+          </button>
+          <button id="resetBtn" type="button" aria-label="Reset bag">
+            <svg class="icon" aria-hidden="true"><use href="#i-refresh"></use></svg>
+            Reset bag
+          </button>
+          <button id="copyBtn" type="button" aria-label="Copy draw to clipboard">
+            <svg class="icon" aria-hidden="true"><use href="#i-clipboard"></use></svg>
+            Copy
+          </button>
+        </div>
+      </div>
+
+      <div id="errorBox" class="error" role="alert" aria-live="polite"></div>
+
+      <div class="meta">
+        <div class="status" aria-live="polite">
+          <span class="pill" title="Tiles remaining in the current bag.">Bag remaining: <strong id="remainingCount">100</strong></span>
+          <span class="pill" title="Total points in the current draw (blanks worth 0).">Draw points: <strong id="drawPoints">0</strong></span>
+          <span class="pill" title="Tiles drawn in the current draw.">Tiles drawn: <strong id="drawnCount">0</strong></span>
+        </div>
+        <div class="status">
+          <span class="pill" title="Press Enter while in the number box to draw.">Tip: <code>Enter</code> draws</span>
+        </div>
+      </div>
+
+      <div class="main">
+        <div class="left">
+          <section class="panel" aria-label="Drawn tiles">
+            <div class="panel-head">
+              <div class="title">Draw result</div>
+            </div>
+            <div id="tiles" class="tiles"></div>
+          </section>
+
+          <section class="panel" aria-label="Copy/paste text">
+            <div class="panel-head">
+              <div class="title">Text version (copy/paste)</div>
+            </div>
+            <textarea id="textOut" class="textout" readonly></textarea>
+          </section>
+
+          <section class="panel" aria-label="Saved entries">
+            <div class="panel-head">
+              <div class="title" style="gap:10px;">
+                Saved
+                <button id="collapseSavedBtn" class="icon" type="button" aria-label="Collapse saved list" title="Collapse/expand saved list">
+                  <svg class="icon" aria-hidden="true"><use href="#i-chevron"></use></svg>
+                </button>
+              </div>
+              <div class="meta-line" title="Totals across all saved entries.">
+                Total: <strong id="savedTotals">0 pts · 0 tiles · 0 spaces</strong>
+              </div>
+            </div>
+
+            <div id="savedList" class="saved-list" aria-label="Saved entries list"></div>
+
+            <div class="hint">
+              Saved entries are locked. Use icons: return to Builder, send to Rack, return to Bag.
+            </div>
+          </section>
+        </div>
+
+        <div class="right">
+          <section class="panel" aria-label="Rack">
+            <div class="panel-head">
+              <div class="title">Your Rack</div>
+              <div class="meta-line" title="Rack tile count (excluding spaces).">Tiles: <strong id="rackCount">0</strong></div>
+            </div>
+            <div id="rackZone" class="tile-surface" role="list" aria-label="Rack drop zone"></div>
+            <div class="hint">Drag tiles within the rack to reorder, or into the Word Builder.</div>
+          </section>
+
+          <section class="panel" aria-label="Word Builder">
+            <div class="panel-head">
+              <div class="title">Word Builder</div>
+              <div class="meta-line" title="Builder stats (updates live).">Builder: <strong id="builderStats">0 pts · 0 tiles · 0 spaces</strong></div>
+            </div>
+
+            <div id="wordZone" class="tile-surface" role="list" aria-label="Word builder drop zone"></div>
+
+            <div class="builder-bar" aria-label="Builder controls">
+              <div class="group">
+                <button id="undoBtn" class="icon" type="button" aria-label="Undo" title="Undo (Ctrl/Cmd+Z)">
+                  <svg class="icon" aria-hidden="true"><use href="#i-undo"></use></svg>
+                </button>
+
+                <button id="saveBuilderBtn" class="primary small" type="button" aria-label="Save builder" title="Save builder (Ctrl/Cmd+S)">
+                  <svg class="icon" aria-hidden="true"><use href="#i-save"></use></svg>
+                  Save
+                </button>
+                <button id="clearBuilderBtn" class="small" type="button" aria-label="Clear builder to rack" title="Clear builder (Esc)">
+                  <svg class="icon" aria-hidden="true"><use href="#i-broom"></use></svg>
+                  Clear
+                </button>
+                <button id="returnAllBtn" class="danger small" type="button" aria-label="Return all to bag" title="Return all tiles (rack/builder/saved) to bag">
+                  <svg class="icon" aria-hidden="true"><use href="#i-bag"></use></svg>
+                  Return all
+                </button>
+              </div>
+
+              <div class="group" style="justify-content:flex-end;">
+                <div id="spacePalette" class="tile space draggable" draggable="true"
+                  aria-label="Space tile (drag into Word Builder)" title="Drag into Builder to insert a space">
+                  <span class="letter">SPACE</span>
+                  <span class="sr-only">0 points</span>
+                </div>
+                <button id="addSpaceBtn" class="small" type="button" aria-label="Add a space to builder" title="Add a space to the end of the builder">
+                  + Space
+                </button>
+              </div>
+
+              <div class="hint" style="flex-basis:100%;">
+                Tip: drop spaces into Return to Bag to delete them.
+              </div>
+            </div>
+          </section>
+
+          <section class="panel" aria-label="Return to Bag">
+            <div class="panel-head">
+              <div class="title">Return to Bag</div>
+              <div class="meta-line" title="Drag tiles here to make them drawable again.">Drop zone</div>
+            </div>
+            <div id="bagZone" class="bag-drop" role="region" aria-label="Return to bag drop zone">
+              Drop tiles here to return them to the bag.
+              <div class="hint">Spaces dropped here are deleted.</div>
+            </div>
+          </section>
+        </div>
+      </div>
+    </div>
+
+    <footer>
+      <div>Distribution matches standard English Scrabble (100 tiles: 98 letters + 2 blanks).</div>
+      <div>Single-file tool: save as <code>.html</code> and open in your browser.</div>
+    </footer>
+  </div>
+
+  <div id="blankModal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="blankModalTitle">
+    <div class="modal-card">
+      <div class="modal-head">
+        <h2 id="blankModalTitle">Assign a letter to BLANK</h2>
+        <button id="blankCloseBtn" class="icon" type="button" aria-label="Close">
+          <svg class="icon" aria-hidden="true"><use href="#i-close"></use></svg>
+        </button>
+      </div>
+      <div class="modal-body">
+        <div class="hint" style="margin:0 0 10px 0;">
+          Choose a letter. You can change it anytime while the tile is in your Rack/Builder.
+        </div>
+        <div id="alphabetGrid" class="alphabet-grid" aria-label="Alphabet selection"></div>
+      </div>
+      <div class="modal-actions">
+        <div class="left-actions">
+          <button id="blankClearBtn" class="small" type="button" title="Clear assignment">Clear</button>
+        </div>
+        <div class="right-actions">
+          <button id="blankCancelBtn" class="small" type="button" title="Cancel">Cancel</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    "use strict";
+
+    const TILE_SPECS = [
+      ["A", 9, 1], ["B", 2, 3], ["C", 2, 3], ["D", 4, 2], ["E", 12, 1],
+      ["F", 2, 4], ["G", 3, 2], ["H", 2, 4], ["I", 9, 1], ["J", 1, 8],
+      ["K", 1, 5], ["L", 4, 1], ["M", 2, 3], ["N", 6, 1], ["O", 8, 1],
+      ["P", 2, 3], ["Q", 1, 10], ["R", 6, 1], ["S", 4, 1], ["T", 6, 1],
+      ["U", 4, 1], ["V", 2, 4], ["W", 2, 4], ["X", 1, 8], ["Y", 2, 4],
+      ["Z", 1, 10], ["_", 2, 0],
+    ];
+
+    const countInput = document.getElementById("countInput");
+    const drawBtn = document.getElementById("drawBtn");
+    const resetBtn = document.getElementById("resetBtn");
+    const copyBtn = document.getElementById("copyBtn");
+    const persistentToggle = document.getElementById("persistentToggle");
+    const errorBox = document.getElementById("errorBox");
+
+    const tilesEl = document.getElementById("tiles");
+    const remainingCount = document.getElementById("remainingCount");
+    const drawPoints = document.getElementById("drawPoints");
+    const drawnCount = document.getElementById("drawnCount");
+    const textOut = document.getElementById("textOut");
+
+    const rackZone = document.getElementById("rackZone");
+    const wordZone = document.getElementById("wordZone");
+    const bagZone = document.getElementById("bagZone");
+
+    const rackCount = document.getElementById("rackCount");
+    const builderStats = document.getElementById("builderStats");
+
+    const savedTotalsEl = document.getElementById("savedTotals");
+    const savedListEl = document.getElementById("savedList");
+    const collapseSavedBtn = document.getElementById("collapseSavedBtn");
+
+    const undoBtn = document.getElementById("undoBtn");
+    const saveBuilderBtn = document.getElementById("saveBuilderBtn");
+    const clearBuilderBtn = document.getElementById("clearBuilderBtn");
+    const returnAllBtn = document.getElementById("returnAllBtn");
+
+    const spacePalette = document.getElementById("spacePalette");
+    const addSpaceBtn = document.getElementById("addSpaceBtn");
+
+    const blankModal = document.getElementById("blankModal");
+    const alphabetGrid = document.getElementById("alphabetGrid");
+    const blankCloseBtn = document.getElementById("blankCloseBtn");
+    const blankCancelBtn = document.getElementById("blankCancelBtn");
+    const blankClearBtn = document.getElementById("blankClearBtn");
+
+    let currentBag = [];
+    let lastDraw = [];
+    let rackTiles = [];
+    let wordTiles = [];
+    let savedEntries = [];
+
+    // one-step undo snapshot
+    let undoSnapshot = null;
+
+    // Drag state
+    let draggingTileId = null;
+    let draggingFromZone = null;
+    let draggingKind = null; // "tile" | "newSpace" | null
+
+    // BLANK selection target
+    let blankTargetId = null;
+
+    function makeId() {
+      if (typeof crypto !== "undefined" && crypto.randomUUID) return crypto.randomUUID();
+      return "id_" + Math.random().toString(16).slice(2) + "_" + Date.now().toString(16);
+    }
+
+    function cloneState() {
+      return {
+        bag: currentBag.map(t => ({...t})),
+        lastDraw: lastDraw.map(t => ({...t})),
+        rack: rackTiles.map(t => ({...t})),
+        word: wordTiles.map(t => ({...t})),
+        saved: savedEntries.map(e => ({ id: e.id, createdAt: e.createdAt, tiles: e.tiles.map(t => ({...t})) }))
+      };
+    }
+    function pushUndo() {
+      undoSnapshot = cloneState();
+      undoBtn.disabled = false;
+      undoBtn.style.opacity = "1";
+    }
+    function undo() {
+      if (!undoSnapshot) return;
+      currentBag = undoSnapshot.bag.map(t => ({...t}));
+      lastDraw = undoSnapshot.lastDraw.map(t => ({...t}));
+      rackTiles = undoSnapshot.rack.map(t => ({...t}));
+      wordTiles = undoSnapshot.word.map(t => ({...t}));
+      savedEntries = undoSnapshot.saved.map(e => ({ id: e.id, createdAt: e.createdAt, tiles: e.tiles.map(t => ({...t})) }));
+      undoSnapshot = null;
+      undoBtn.disabled = true;
+      undoBtn.style.opacity = ".55";
+
+      renderRecentDraw(lastDraw);
+      textOut.value = tilesToText(lastDraw);
+      updateMeta(lastDraw);
+      renderLab();
+      setError("");
+    }
+
+    function makeSpaceToken() {
+      return { id: makeId(), letter: " ", points: 0, isSpace: true };
+    }
+    function isBlankTile(t) {
+      return t?.letter === "_" || t?.isBlank === true;
+    }
+    function clearBlankAssignment(t) {
+      if (!t) return;
+      delete t.assignedLetter;
+    }
+
+    function buildBag() {
+      const bag = [];
+      for (const [letter, count, points] of TILE_SPECS) {
+        for (let i = 0; i < count; i++) {
+          bag.push({ id: makeId(), letter, points, isBlank: letter === "_" });
+        }
+      }
+      return bag;
+    }
+    function drawTiles(bag, n) {
+      const drawn = [];
+      for (let i = 0; i < n; i++) {
+        const idx = Math.floor(Math.random() * bag.length);
+        drawn.push(bag[idx]);
+        bag[idx] = bag[bag.length - 1];
+        bag.pop();
+      }
+      return drawn;
+    }
+
+    function setError(msg) {
+      errorBox.textContent = msg || "";
+      errorBox.classList.toggle("show", Boolean(msg));
+    }
+    function updateMeta(drawn) {
+      remainingCount.textContent = String(currentBag.length);
+      drawnCount.textContent = String(drawn.length);
+      drawPoints.textContent = String(drawn.reduce((s, t) => s + (t.points || 0), 0));
+    }
+
+    function renderRecentDraw(drawn) {
+      tilesEl.innerHTML = "";
+      for (const tile of drawn) {
+        const blank = isBlankTile(tile);
+        const tileDiv = document.createElement("div");
+        tileDiv.className = "tile" + (blank ? " blank" : "");
+        tileDiv.dataset.letter = tile.letter;
+
+        const letterSpan = document.createElement("span");
+        letterSpan.className = "letter";
+        letterSpan.textContent = blank ? "BLANK" : tile.letter;
+        tileDiv.appendChild(letterSpan);
+
+        if (!blank) {
+          const pointsSpan = document.createElement("span");
+          pointsSpan.className = "points";
+          pointsSpan.textContent = String(tile.points);
+          tileDiv.appendChild(pointsSpan);
+        } else {
+          const sr = document.createElement("span");
+          sr.className = "sr-only";
+          sr.textContent = "0 points";
+          tileDiv.appendChild(sr);
+        }
+        tilesEl.appendChild(tileDiv);
+      }
+    }
+
+    function tilesToText(drawn) {
+      if (!drawn.length) return "";
+      const parts = drawn.map(t => (isBlankTile(t)) ? "BLANK(0)" : `${t.letter}(${t.points})`);
+      const total = drawn.reduce((sum, t) => sum + t.points, 0);
+      return `Draw: ${parts.join(" ")}\nTotal points: ${total}`;
+    }
+
+    function countPointsAndSpaces(tokens) {
+      let pts = 0, tiles = 0, spaces = 0;
+      for (const t of tokens) {
+        if (t.isSpace) { spaces++; continue; }
+        tiles++;
+        pts += (t.points || 0);
+      }
+      return { pts, tiles, spaces };
+    }
+    function updateBuilderStats() {
+      const s = countPointsAndSpaces(wordTiles);
+      builderStats.textContent = `${s.pts} pts · ${s.tiles} tiles · ${s.spaces} spaces`;
+    }
+    function updateSavedTotals() {
+      let pts = 0, tiles = 0, spaces = 0;
+      for (const e of savedEntries) {
+        const s = countPointsAndSpaces(e.tiles);
+        pts += s.pts; tiles += s.tiles; spaces += s.spaces;
+      }
+      savedTotalsEl.textContent = `${pts} pts · ${tiles} tiles · ${spaces} spaces`;
+    }
+
+    function hasTilesOut() {
+      if (rackTiles.length + wordTiles.length > 0) return true;
+      for (const e of savedEntries) {
+        if (e.tiles.some(t => !t.isSpace)) return true;
+      }
+      return false;
+    }
+
+    function getBeforeIdFromPoint(containerEl, clientX, clientY) {
+      const el = document.elementFromPoint(clientX, clientY);
+      const tileEl = el?.closest?.(".tile.draggable:not(.dragging)");
+      if (tileEl && containerEl.contains(tileEl)) return tileEl.dataset.tileId;
+      return null;
+    }
+
+    function safeParsePayload(ev) {
+      const types = ["text/plain", "text", "application/json"];
+      for (const t of types) {
+        const data = ev.dataTransfer.getData(t);
+        if (!data) continue;
+        try { return JSON.parse(data); } catch {}
+      }
+      if (draggingTileId) return { tileId: draggingTileId, from: draggingFromZone };
+      return null;
+    }
+
+    function findTileLocation(tileId) {
+      let idx = rackTiles.findIndex(t => t.id === tileId);
+      if (idx !== -1) return { zone: "rack", idx };
+      idx = wordTiles.findIndex(t => t.id === tileId);
+      if (idx !== -1) return { zone: "word", idx };
+      return null;
+    }
+    function removeTileAtLocation(loc) {
+      const arr = (loc.zone === "rack") ? rackTiles : wordTiles;
+      return arr.splice(loc.idx, 1)[0];
+    }
+
+    function hasBeforeId(beforeId){ return typeof beforeId === "string" && beforeId.length > 0; }
+    function insertTileIntoZone(tile, zoneName, beforeTileIdOrNull) {
+      const target = (zoneName === "rack") ? rackTiles : wordTiles;
+      if (!hasBeforeId(beforeTileIdOrNull)) { target.push(tile); return; }
+      const idx = target.findIndex(t => t.id === beforeTileIdOrNull);
+      if (idx === -1) target.push(tile);
+      else target.splice(idx, 0, tile);
+    }
+
+    function handleDropIntoSurface(ev, zoneName, containerEl) {
+      ev.preventDefault();
+      setError("");
+
+      const payload = safeParsePayload(ev);
+      if (!payload) return;
+
+      // NEW SPACE from palette
+      if (payload.kind === "newSpace") {
+        if (zoneName !== "word") {
+          setError("Spaces can only be added to the Word Builder.");
+          return;
+        }
+        pushUndo();
+        const beforeId = getBeforeIdFromPoint(containerEl, ev.clientX, ev.clientY);
+        insertTileIntoZone(makeSpaceToken(), "word", beforeId);
+        renderLab();
+        return;
+      }
+
+      const tileId = payload.tileId;
+      if (!tileId) return;
+
+      const loc = findTileLocation(tileId);
+      if (!loc) return;
+
+      // Prevent spaces in rack (keeps rack clean)
+      if (zoneName === "rack") {
+        const candidate = (loc.zone === "word") ? wordTiles[loc.idx] : rackTiles[loc.idx];
+        if (candidate?.isSpace) {
+          setError("Spaces live in the Word Builder only (drop into Bag to delete).");
+          return;
+        }
+      }
+
+      pushUndo();
+
+      const beforeId = getBeforeIdFromPoint(containerEl, ev.clientX, ev.clientY);
+      const tile = removeTileAtLocation(loc);
+      if (!tile) return;
+
+      insertTileIntoZone(tile, zoneName, beforeId);
+      renderLab();
+    }
+
+    function handleDropIntoBag(ev) {
+      ev.preventDefault();
+      setError("");
+
+      const payload = safeParsePayload(ev);
+      const tileId = payload?.tileId;
+      if (!tileId) return;
+
+      const loc = findTileLocation(tileId);
+      if (!loc) return;
+
+      pushUndo();
+      const tile = removeTileAtLocation(loc);
+      if (!tile) return;
+
+      // ✅ Spaces: delete them (they're not part of the bag)
+      if (tile.isSpace) {
+        setError(""); // silent success
+        renderLab();
+        return;
+      }
+
+      // Return a BLANK to bag clears assignment
+      if (isBlankTile(tile)) clearBlankAssignment(tile);
+
+      currentBag.push(tile);
+      updateMeta(lastDraw);
+      renderLab();
+    }
+
+    // ✅ Critical fix: dropEffect must match effectAllowed.
+    // Use a simple, reliable flag: draggingKind ("newSpace" => copy, else move).
+    function wireDropZoneStyles(containerEl, classOn) {
+      containerEl.addEventListener("dragenter", (ev) => {
+        ev.preventDefault();
+        containerEl.classList.add(classOn);
+      });
+      containerEl.addEventListener("dragleave", (ev) => {
+        if (!containerEl.contains(ev.relatedTarget)) containerEl.classList.remove(classOn);
+      });
+      containerEl.addEventListener("dragover", (ev) => {
+        ev.preventDefault();
+        containerEl.classList.add(classOn);
+        ev.dataTransfer.dropEffect = (draggingKind === "newSpace") ? "copy" : "move";
+      });
+      containerEl.addEventListener("drop", () => containerEl.classList.remove(classOn));
+    }
+
+    function displayLetter(tile) {
+      if (tile.isSpace) return "SPACE";
+      if (isBlankTile(tile)) return (tile.assignedLetter ? tile.assignedLetter : "BLANK");
+      return tile.letter;
+    }
+
+    function removeTileById(tileId) {
+      const rIdx = rackTiles.findIndex(t => t.id === tileId);
+      if (rIdx !== -1) { rackTiles.splice(rIdx, 1); return true; }
+      const wIdx = wordTiles.findIndex(t => t.id === tileId);
+      if (wIdx !== -1) { wordTiles.splice(wIdx, 1); return true; }
+      return false;
+    }
+
+    function createLabTileEl(tile, zoneName) {
+      const blank = isBlankTile(tile);
+      const space = Boolean(tile.isSpace);
+      const assigned = blank && Boolean(tile.assignedLetter);
+
+      const el = document.createElement("div");
+      el.className = "tile draggable" +
+        (blank ? " blank" : "") +
+        (assigned ? " assigned" : "") +
+        (space ? " space" : "");
+      el.draggable = true;
+      el.dataset.tileId = tile.id;
+      el.dataset.zone = zoneName;
+      el.dataset.letter = space ? " " : tile.letter;
+      el.setAttribute("role", "listitem");
+      el.tabIndex = 0;
+
+      if (space) el.title = "SPACE: double-click/Delete to remove, or drag to Bag to delete";
+      if (blank && !space) el.title = "BLANK: double-click (or Enter) to assign/change";
+
+      const letterSpan = document.createElement("span");
+      letterSpan.className = "letter";
+      letterSpan.textContent = displayLetter(tile);
+      el.appendChild(letterSpan);
+
+      if (!blank && !space) {
+        const pointsSpan = document.createElement("span");
+        pointsSpan.className = "points";
+        pointsSpan.textContent = String(tile.points);
+        el.appendChild(pointsSpan);
+      } else if (blank && !assigned) {
+        const hint = document.createElement("span");
+        hint.className = "subhint";
+        hint.textContent = "0";
+        el.appendChild(hint);
+      }
+
+      // Space delete: dblclick
+      if (space) {
+        el.addEventListener("dblclick", () => {
+          pushUndo();
+          removeTileById(tile.id);
+          renderLab();
+        });
+      }
+
+      // BLANK assignment triggers
+      if (blank && !space) {
+        el.addEventListener("dblclick", () => openBlankModal(tile.id));
+        el.addEventListener("keydown", (ev) => {
+          if (ev.key === "Enter") {
+            ev.preventDefault();
+            openBlankModal(tile.id);
+          }
+        });
+      }
+
+      // Delete/backspace on focused tile:
+      // - Space: remove
+      // - Letter tile: return to bag
+      el.addEventListener("keydown", (ev) => {
+        if (ev.key !== "Delete" && ev.key !== "Backspace") return;
+        ev.preventDefault();
+        pushUndo();
+
+        if (tile.isSpace) {
+          removeTileById(tile.id);
+          renderLab();
+          return;
+        }
+
+        // return letter to bag
+        const loc = findTileLocation(tile.id);
+        if (!loc) { renderLab(); return; }
+        const t = removeTileAtLocation(loc);
+        if (t) {
+          if (isBlankTile(t)) clearBlankAssignment(t);
+          currentBag.push(t);
+        }
+        renderLab();
+      });
+
+      el.addEventListener("dragstart", (ev) => {
+        draggingTileId = tile.id;
+        draggingFromZone = zoneName;
+        draggingKind = "tile";
+        el.classList.add("dragging");
+
+        ev.dataTransfer.effectAllowed = "move";
+        const payload = JSON.stringify({ tileId: tile.id, from: zoneName, kind: "tile" });
+        ev.dataTransfer.setData("text/plain", payload);
+        ev.dataTransfer.setData("text", payload);
+        ev.dataTransfer.setData("application/json", payload);
+
+        try{
+          const ghost = el.cloneNode(true);
+          ghost.style.position = "absolute";
+          ghost.style.top = "-9999px";
+          ghost.style.left = "-9999px";
+          ghost.classList.remove("dragging");
+          document.body.appendChild(ghost);
+          ev.dataTransfer.setDragImage(ghost, 33, 33);
+          setTimeout(() => ghost.remove(), 0);
+        } catch {}
+      });
+
+      el.addEventListener("dragend", () => {
+        el.classList.remove("dragging");
+        draggingTileId = null;
+        draggingFromZone = null;
+        draggingKind = null;
+
+        rackZone.classList.remove("drag-over");
+        wordZone.classList.remove("drag-over");
+        bagZone.classList.remove("drag-over");
+      });
+
+      return el;
+    }
+
+    function renderLab() {
+      rackZone.innerHTML = "";
+      wordZone.innerHTML = "";
+
+      for (const t of rackTiles) rackZone.appendChild(createLabTileEl(t, "rack"));
+      for (const t of wordTiles) wordZone.appendChild(createLabTileEl(t, "word"));
+
+      rackCount.textContent = String(rackTiles.filter(t => !t.isSpace).length);
+      updateBuilderStats();
+      renderSavedEntries();
+      updateMeta(lastDraw);
+    }
+
+    function formatSavedText(tokens) {
+      return tokens.map(t => {
+        if (t.isSpace) return " ";
+        if (isBlankTile(t)) return (t.assignedLetter ? t.assignedLetter : "□");
+        return t.letter;
+      }).join("").replace(/\s{2,}/g, " ");
+    }
+
+    function renderSavedEntries() {
+      savedListEl.innerHTML = "";
+      updateSavedTotals();
+
+      if (savedEntries.length === 0) {
+        const empty = document.createElement("div");
+        empty.className = "hint";
+        empty.textContent = "No saved entries yet. Build something in Word Builder and hit Save.";
+        savedListEl.appendChild(empty);
+        return;
+      }
+
+      savedEntries.forEach((entry, idx) => {
+        const s = countPointsAndSpaces(entry.tiles);
+        const textLine = formatSavedText(entry.tiles).trimEnd();
+
+        const card = document.createElement("div");
+        card.className = "saved-entry";
+
+        const top = document.createElement("div");
+        top.className = "top";
+
+        const stats = document.createElement("div");
+        stats.className = "stats";
+        stats.innerHTML = `<span><strong>Saved #${idx + 1}</strong></span><span>·</span><span>${s.pts} pts</span><span>·</span><span>${s.tiles} tiles</span><span>·</span><span>${s.spaces} spaces</span>`;
+
+        const actions = document.createElement("div");
+        actions.className = "actions";
+
+        const toBuilder = document.createElement("button");
+        toBuilder.className = "icon";
+        toBuilder.type = "button";
+        toBuilder.title = "Edit in Builder";
+        toBuilder.innerHTML = `<svg class="icon" aria-hidden="true"><use href="#i-to-builder"></use></svg>`;
+        toBuilder.addEventListener("click", () => {
+          pushUndo();
+          if (wordTiles.length > 0 && !wordTiles[wordTiles.length - 1].isSpace) {
+            wordTiles.push(makeSpaceToken());
+          }
+          wordTiles.push(...entry.tiles.map(t => ({...t})));
+          savedEntries = savedEntries.filter(e => e.id !== entry.id);
+          renderLab();
+        });
+
+        const toRack = document.createElement("button");
+        toRack.className = "icon";
+        toRack.type = "button";
+        toRack.title = "Send to Rack";
+        toRack.innerHTML = `<svg class="icon" aria-hidden="true"><use href="#i-to-rack"></use></svg>`;
+        toRack.addEventListener("click", () => {
+          pushUndo();
+          for (const t of entry.tiles) {
+            if (t.isSpace) continue;
+            rackTiles.push({...t});
+          }
+          savedEntries = savedEntries.filter(e => e.id !== entry.id);
+          renderLab();
+        });
+
+        const toBag = document.createElement("button");
+        toBag.className = "icon";
+        toBag.type = "button";
+        toBag.title = "Return to Bag";
+        toBag.innerHTML = `<svg class="icon" aria-hidden="true"><use href="#i-bag"></use></svg>`;
+        toBag.addEventListener("click", () => {
+          pushUndo();
+          for (const t of entry.tiles) {
+            if (t.isSpace) continue;
+            const tile = {...t};
+            if (isBlankTile(tile)) clearBlankAssignment(tile);
+            currentBag.push(tile);
+          }
+          savedEntries = savedEntries.filter(e => e.id !== entry.id);
+          renderLab();
+        });
+
+        actions.appendChild(toBuilder);
+        actions.appendChild(toRack);
+        actions.appendChild(toBag);
+
+        top.appendChild(stats);
+        top.appendChild(actions);
+
+        const line = document.createElement("div");
+        line.className = "line";
+        line.textContent = textLine.length ? textLine : "(empty)";
+
+        card.appendChild(top);
+        card.appendChild(line);
+
+        savedListEl.appendChild(card);
+      });
+    }
+
+    function validateCount(rawValue) {
+      const n = Number(rawValue);
+      if (!Number.isFinite(n) || !Number.isInteger(n)) return { ok:false, message:"Please enter a whole number (e.g., 7)." };
+      if (n < 1) return { ok:false, message:"Draw count must be at least 1." };
+      if (n > 100) return { ok:false, message:"Only 100 tiles exist in the full bag. Try 100 or less." };
+      return { ok:true, value:n };
+    }
+
+    function handleDraw() {
+      setError("");
+      const v = validateCount(countInput.value);
+      if (!v.ok) { setError(v.message); return; }
+      const n = v.value;
+
+      if (!persistentToggle.checked && hasTilesOut()) {
+        persistentToggle.checked = true;
+        setError("Persistent bag can’t be turned off while you have tiles out. Return tiles or Reset bag.");
+        return;
+      }
+
+      pushUndo();
+      if (!persistentToggle.checked) currentBag = buildBag();
+
+      if (n > currentBag.length) {
+        setError(`Not enough tiles left to draw ${n}. Bag has ${currentBag.length} remaining.`);
+        return;
+      }
+
+      lastDraw = drawTiles(currentBag, n);
+      renderRecentDraw(lastDraw);
+      textOut.value = tilesToText(lastDraw);
+      updateMeta(lastDraw);
+
+      rackTiles.push(...lastDraw);
+      renderLab();
+    }
+
+    function resetBag() {
+      currentBag = buildBag();
+      lastDraw = [];
+      rackTiles = [];
+      wordTiles = [];
+      savedEntries = [];
+      undoSnapshot = null;
+
+      persistentToggle.checked = true;
+
+      renderRecentDraw([]);
+      textOut.value = "";
+      updateMeta([]);
+      renderLab();
+      setError("");
+
+      undoBtn.disabled = true;
+      undoBtn.style.opacity = ".55";
+    }
+
+    async function copyToClipboard() {
+      setError("");
+      const text = textOut.value.trim();
+      if (!text) { setError("Nothing to copy yet — draw tiles first."); return; }
+      try {
+        await navigator.clipboard.writeText(text);
+        const old = copyBtn.textContent;
+        copyBtn.textContent = "Copied";
+        setTimeout(() => (copyBtn.textContent = old), 900);
+      } catch {
+        textOut.focus();
+        textOut.select();
+        setError("Clipboard blocked by browser. Text selected — press Ctrl/Cmd+C to copy.");
+      }
+    }
+
+    function clearBuilderToRack() {
+      if (wordTiles.length === 0) return;
+      pushUndo();
+      for (const t of wordTiles) {
+        if (t.isSpace) continue;
+        rackTiles.push(t);
+      }
+      wordTiles = [];
+      renderLab();
+      setError("");
+    }
+
+    function returnAllToBag() {
+      pushUndo();
+
+      for (const t of rackTiles) {
+        if (isBlankTile(t)) clearBlankAssignment(t);
+        currentBag.push(t);
+      }
+      for (const t of wordTiles) {
+        if (t.isSpace) continue;
+        if (isBlankTile(t)) clearBlankAssignment(t);
+        currentBag.push(t);
+      }
+      for (const e of savedEntries) {
+        for (const t of e.tiles) {
+          if (t.isSpace) continue;
+          const tile = {...t};
+          if (isBlankTile(tile)) clearBlankAssignment(tile);
+          currentBag.push(tile);
+        }
+      }
+
+      rackTiles = [];
+      wordTiles = [];
+      savedEntries = [];
+      renderLab();
+      setError("");
+    }
+
+    function saveBuilder() {
+      setError("");
+      if (wordTiles.length === 0) {
+        setError("Word Builder is empty — build something first, then Save.");
+        return;
+      }
+      pushUndo();
+      savedEntries.unshift({
+        id: makeId(),
+        tiles: wordTiles.map(t => ({...t})),
+        createdAt: Date.now()
+      });
+      wordTiles = [];
+      renderLab();
+    }
+
+    function addSpaceToEnd() {
+      pushUndo();
+      wordTiles.push(makeSpaceToken());
+      renderLab();
+    }
+
+    function toggleSavedCollapse(force) {
+      const isCollapsed = savedListEl.classList.contains("collapsed");
+      const next = (typeof force === "boolean") ? force : !isCollapsed;
+
+      savedListEl.classList.toggle("collapsed", next);
+      collapseSavedBtn.style.transform = next ? "rotate(-90deg)" : "rotate(0deg)";
+      collapseSavedBtn.setAttribute("aria-label", next ? "Expand saved list" : "Collapse saved list");
+      localStorage.setItem("scrabble_saved_collapsed", next ? "1" : "0");
+    }
+
+    // BLANK modal
+    function openBlankModal(tileId) {
+      blankTargetId = tileId;
+      buildAlphabetButtons();
+      blankModal.classList.remove("hidden");
+      setError("");
+      setTimeout(() => {
+        const first = alphabetGrid.querySelector("button.alpha");
+        first?.focus();
+      }, 0);
+    }
+    function closeBlankModal() {
+      blankTargetId = null;
+      blankModal.classList.add("hidden");
+    }
+    function findEditableTileById(tileId) {
+      let t = rackTiles.find(x => x.id === tileId);
+      if (t) return t;
+      t = wordTiles.find(x => x.id === tileId);
+      if (t) return t;
+      return null;
+    }
+    function assignBlank(letterOrNull) {
+      if (!blankTargetId) return;
+      const tile = findEditableTileById(blankTargetId);
+      if (!tile || !isBlankTile(tile)) { closeBlankModal(); return; }
+      pushUndo();
+      if (!letterOrNull) clearBlankAssignment(tile);
+      else tile.assignedLetter = letterOrNull;
+      closeBlankModal();
+      renderLab();
+    }
+    function buildAlphabetButtons() {
+      alphabetGrid.innerHTML = "";
+      const letters = "ABCDEFGHIJKLMNOPQRSTUVWXYZ".split("");
+      for (const L of letters) {
+        const b = document.createElement("button");
+        b.type = "button";
+        b.className = "alpha";
+        b.textContent = L;
+        b.addEventListener("click", () => assignBlank(L));
+        alphabetGrid.appendChild(b);
+      }
+    }
+
+    // --- EVENTS ---
+    drawBtn.addEventListener("click", handleDraw);
+    resetBtn.addEventListener("click", resetBag);
+    copyBtn.addEventListener("click", copyToClipboard);
+
+    undoBtn.addEventListener("click", undo);
+    saveBuilderBtn.addEventListener("click", saveBuilder);
+    clearBuilderBtn.addEventListener("click", clearBuilderToRack);
+    returnAllBtn.addEventListener("click", returnAllToBag);
+
+    addSpaceBtn.addEventListener("click", addSpaceToEnd);
+
+    countInput.addEventListener("keydown", (ev) => {
+      if (ev.key === "Enter") { ev.preventDefault(); handleDraw(); }
+    });
+
+    persistentToggle.addEventListener("change", () => {
+      if (!persistentToggle.checked && hasTilesOut()) {
+        persistentToggle.checked = true;
+        setError("Persistent bag can’t be turned off while you have tiles out. Return tiles or Reset bag.");
+        return;
+      }
+      setError("");
+      remainingCount.textContent = persistentToggle.checked ? String(currentBag.length) : "100";
+    });
+
+    document.addEventListener("keydown", (ev) => {
+      const meta = ev.metaKey || ev.ctrlKey;
+      const key = ev.key.toLowerCase();
+      const active = document.activeElement;
+      const isTyping = active && (
+        (active.tagName === "INPUT" && active.type !== "number") ||
+        (active.tagName === "TEXTAREA" && !active.readOnly) ||
+        active.isContentEditable
+      );
+
+      if (meta && key === "s") { ev.preventDefault(); if (!isTyping) saveBuilder(); return; }
+      if (meta && key === "z") { ev.preventDefault(); if (!isTyping) undo(); return; }
+      if (ev.key === "Escape") { if (!isTyping && blankModal.classList.contains("hidden")) clearBuilderToRack(); return; }
+    });
+
+    // Drop targets
+    rackZone.addEventListener("drop", (ev) => handleDropIntoSurface(ev, "rack", rackZone));
+    wordZone.addEventListener("drop", (ev) => handleDropIntoSurface(ev, "word", wordZone));
+    bagZone.addEventListener("drop", handleDropIntoBag);
+
+    rackZone.addEventListener("dragover", (ev) => ev.preventDefault());
+    wordZone.addEventListener("dragover", (ev) => ev.preventDefault());
+    bagZone.addEventListener("dragover", (ev) => ev.preventDefault());
+
+    wireDropZoneStyles(rackZone, "drag-over");
+    wireDropZoneStyles(wordZone, "drag-over");
+    wireDropZoneStyles(bagZone, "drag-over");
+
+    // ✅ Space palette drag: mark draggingKind="newSpace"
+    spacePalette.addEventListener("dragstart", (ev) => {
+      draggingKind = "newSpace";
+      ev.dataTransfer.effectAllowed = "copy";
+      const payload = JSON.stringify({ kind: "newSpace" });
+      ev.dataTransfer.setData("text/plain", payload);
+      ev.dataTransfer.setData("text", payload);
+      ev.dataTransfer.setData("application/json", payload);
+
+      try{
+        const ghost = spacePalette.cloneNode(true);
+        ghost.style.position = "absolute";
+        ghost.style.top = "-9999px";
+        ghost.style.left = "-9999px";
+        document.body.appendChild(ghost);
+        ev.dataTransfer.setDragImage(ghost, 33, 33);
+        setTimeout(() => ghost.remove(), 0);
+      } catch {}
+    });
+    spacePalette.addEventListener("dragend", () => {
+      draggingKind = null;
+      rackZone.classList.remove("drag-over");
+      wordZone.classList.remove("drag-over");
+      bagZone.classList.remove("drag-over");
+    });
+
+    // Saved collapse
+    collapseSavedBtn.addEventListener("click", () => toggleSavedCollapse());
+
+    // BLANK modal events
+    blankCloseBtn.addEventListener("click", closeBlankModal);
+    blankCancelBtn.addEventListener("click", closeBlankModal);
+    blankClearBtn.addEventListener("click", () => assignBlank(null));
+    blankModal.addEventListener("click", (ev) => { if (ev.target === blankModal) closeBlankModal(); });
+    document.addEventListener("keydown", (ev) => {
+      if (!blankModal.classList.contains("hidden") && ev.key === "Escape") {
+        ev.preventDefault();
+        closeBlankModal();
+      }
+    });
+
+    function init() {
+      resetBag();
+      const collapsed = localStorage.getItem("scrabble_saved_collapsed") === "1";
+      toggleSavedCollapse(collapsed);
+      undoBtn.disabled = true;
+      undoBtn.style.opacity = ".55";
+    }
+
+    init();
+
+    // Patch: ensure tile dragstart sets draggingKind properly (runs inside renderLab)
+    // so we keep it here: createLabTileEl already sets draggingKind="tile".
+  </script>
+
+  <script>
+    // We keep createLabTileEl + renderLab in the first script.
+    // This second script is intentionally empty; leaving it as-is to avoid refactoring.
+  </script>
+</body>
+</html>

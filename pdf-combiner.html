@@ -1,0 +1,345 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>PDF Combiner (Local)</title>
+  <style>
+    :root { --bg:#0b0f19; --card:#121a2a; --muted:#9fb0d0; --text:#e9efff; --accent:#6ea8ff; --danger:#ff6b6b; }
+    body { margin:0; font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; background:linear-gradient(180deg,#070a12, var(--bg)); color:var(--text); }
+    .wrap { max-width: 900px; margin: 28px auto; padding: 0 16px 40px; }
+    h1 { font-size: 22px; margin: 0 0 10px; }
+    p { margin: 6px 0 0; color: var(--muted); line-height: 1.45; }
+    .card { background: rgba(18,26,42,.92); border:1px solid rgba(255,255,255,.08); border-radius: 14px; padding: 16px; box-shadow: 0 10px 30px rgba(0,0,0,.35); }
+    .row { display:flex; gap: 10px; flex-wrap: wrap; align-items:center; margin-top: 12px; }
+    button, input[type="text"] {
+      border-radius: 10px; border: 1px solid rgba(255,255,255,.12);
+      background: rgba(255,255,255,.06); color: var(--text);
+      padding: 10px 12px; font-size: 14px;
+    }
+    button { cursor:pointer; }
+    button.primary { background: rgba(110,168,255,.18); border-color: rgba(110,168,255,.35); }
+    button.primary:disabled { opacity:.5; cursor:not-allowed; }
+    button.danger { background: rgba(255,107,107,.12); border-color: rgba(255,107,107,.35); }
+    button.ghost { background: transparent; }
+    input[type="text"] { min-width: 210px; }
+    .drop {
+      margin-top: 14px;
+      border: 1px dashed rgba(255,255,255,.22);
+      border-radius: 14px;
+      padding: 16px;
+      background: rgba(255,255,255,.04);
+    }
+    .drop strong { color: var(--text); }
+    .list { margin-top: 14px; display: grid; gap: 10px; }
+    .item {
+      display:flex; gap: 10px; align-items:center; justify-content:space-between;
+      padding: 10px; border-radius: 12px;
+      border:1px solid rgba(255,255,255,.10);
+      background: rgba(255,255,255,.04);
+    }
+    .item.dragging { opacity:.65; }
+    .left { display:flex; gap: 10px; align-items:center; min-width: 0; }
+    .handle {
+      width: 34px; height: 34px; border-radius: 10px;
+      border: 1px solid rgba(255,255,255,.12);
+      display:grid; place-items:center;
+      user-select:none;
+      cursor: grab;
+      background: rgba(255,255,255,.05);
+      flex: 0 0 auto;
+    }
+    .meta { min-width: 0; }
+    .name { font-weight: 650; white-space: nowrap; overflow:hidden; text-overflow: ellipsis; max-width: 520px; }
+    .small { color: var(--muted); font-size: 12px; margin-top: 2px; }
+    .actions { display:flex; gap: 6px; flex: 0 0 auto; }
+    .status { margin-top: 12px; font-size: 13px; color: var(--muted); }
+    .status.ok { color: #a7f3d0; }
+    .status.err { color: #fecaca; }
+    .bar { height: 8px; border-radius: 10px; background: rgba(255,255,255,.08); overflow:hidden; margin-top: 8px; }
+    .bar > div { height: 100%; width: 0%; background: rgba(110,168,255,.55); transition: width .15s ease; }
+    a { color: var(--accent); text-decoration: none; }
+    .footer { margin-top: 10px; font-size: 12px; color: var(--muted); }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="card">
+      <h1>PDF Combiner (runs locally)</h1>
+      <p>Select multiple PDFs, <strong>reorder</strong> them, then merge into one downloadable PDF. Nothing is uploaded anywhere.</p>
+
+      <div class="row">
+        <button id="pickBtn" class="primary">Select PDFs</button>
+        <button id="combineBtn" class="primary" disabled>Combine & Download</button>
+        <button id="clearBtn" class="danger" disabled>Clear</button>
+        <input id="outName" type="text" value="combined.pdf" aria-label="Output filename" />
+      </div>
+
+      <div id="drop" class="drop" role="button" tabindex="0" aria-label="Drop PDFs here">
+        <strong>Tip:</strong> Drag & drop PDFs here, or click “Select PDFs”.
+      </div>
+
+      <div id="list" class="list" aria-live="polite"></div>
+
+      <div id="status" class="status"></div>
+      <div class="bar" aria-hidden="true"><div id="progress"></div></div>
+
+      <div class="footer">
+        Uses <a href="https://pdf-lib.js.org/" target="_blank" rel="noreferrer">pdf-lib</a> in your browser. For GitHub Pages, just commit this file and enable Pages.
+      </div>
+
+      <input id="fileInput" type="file" accept="application/pdf" multiple hidden />
+    </div>
+  </div>
+
+  <!-- pdf-lib (CDN). Keep pinned for stability. -->
+  <script src="https://unpkg.com/pdf-lib@1.17.1/dist/pdf-lib.min.js"></script>
+
+  <script>
+    const fileInput = document.getElementById('fileInput');
+    const pickBtn = document.getElementById('pickBtn');
+    const combineBtn = document.getElementById('combineBtn');
+    const clearBtn = document.getElementById('clearBtn');
+    const outName = document.getElementById('outName');
+    const listEl = document.getElementById('list');
+    const statusEl = document.getElementById('status');
+    const progressEl = document.getElementById('progress');
+    const dropEl = document.getElementById('drop');
+
+    /** @type {{id:string, file:File}[]} */
+    let items = [];
+    let dragId = null;
+
+    const fmtBytes = (n) => {
+      const u = ['B','KB','MB','GB'];
+      let i = 0, x = n;
+      while (x >= 1024 && i < u.length-1) { x /= 1024; i++; }
+      return `${x.toFixed(i === 0 ? 0 : 1)} ${u[i]}`;
+    };
+
+    function setStatus(msg, kind='') {
+      statusEl.textContent = msg || '';
+      statusEl.className = 'status' + (kind ? ' ' + kind : '');
+    }
+    function setProgress(pct) {
+      progressEl.style.width = `${Math.max(0, Math.min(100, pct))}%`;
+    }
+
+    function updateButtons() {
+      const has = items.length > 0;
+      combineBtn.disabled = !has;
+      clearBtn.disabled = !has;
+    }
+
+    function render() {
+      listEl.innerHTML = '';
+      items.forEach((it, idx) => {
+        const row = document.createElement('div');
+        row.className = 'item';
+        row.draggable = true;
+        row.dataset.id = it.id;
+
+        row.addEventListener('dragstart', (e) => {
+          dragId = it.id;
+          row.classList.add('dragging');
+          e.dataTransfer.effectAllowed = 'move';
+        });
+        row.addEventListener('dragend', () => {
+          dragId = null;
+          row.classList.remove('dragging');
+        });
+        row.addEventListener('dragover', (e) => {
+          e.preventDefault();
+          e.dataTransfer.dropEffect = 'move';
+        });
+        row.addEventListener('drop', (e) => {
+          e.preventDefault();
+          const targetId = row.dataset.id;
+          if (!dragId || dragId === targetId) return;
+          const from = items.findIndex(x => x.id === dragId);
+          const to = items.findIndex(x => x.id === targetId);
+          const [moved] = items.splice(from, 1);
+          items.splice(to, 0, moved);
+          render();
+        });
+
+        const left = document.createElement('div');
+        left.className = 'left';
+
+        const handle = document.createElement('div');
+        handle.className = 'handle';
+        handle.title = 'Drag to reorder';
+        handle.textContent = '≡';
+
+        const meta = document.createElement('div');
+        meta.className = 'meta';
+
+        const name = document.createElement('div');
+        name.className = 'name';
+        name.textContent = `${idx + 1}. ${it.file.name}`;
+
+        const small = document.createElement('div');
+        small.className = 'small';
+        small.textContent = `${fmtBytes(it.file.size)} · application/pdf`;
+
+        meta.appendChild(name);
+        meta.appendChild(small);
+        left.appendChild(handle);
+        left.appendChild(meta);
+
+        const actions = document.createElement('div');
+        actions.className = 'actions';
+
+        const up = document.createElement('button');
+        up.className = 'ghost';
+        up.textContent = '↑';
+        up.title = 'Move up';
+        up.disabled = idx === 0;
+        up.onclick = () => {
+          const [m] = items.splice(idx, 1);
+          items.splice(idx - 1, 0, m);
+          render();
+        };
+
+        const down = document.createElement('button');
+        down.className = 'ghost';
+        down.textContent = '↓';
+        down.title = 'Move down';
+        down.disabled = idx === items.length - 1;
+        down.onclick = () => {
+          const [m] = items.splice(idx, 1);
+          items.splice(idx + 1, 0, m);
+          render();
+        };
+
+        const remove = document.createElement('button');
+        remove.className = 'danger';
+        remove.textContent = 'Remove';
+        remove.onclick = () => {
+          items = items.filter(x => x.id !== it.id);
+          render();
+          updateButtons();
+          if (items.length === 0) setStatus('');
+        };
+
+        actions.appendChild(up);
+        actions.appendChild(down);
+        actions.appendChild(remove);
+
+        row.appendChild(left);
+        row.appendChild(actions);
+        listEl.appendChild(row);
+      });
+
+      updateButtons();
+    }
+
+    function addFiles(fileList) {
+      const files = Array.from(fileList || []).filter(f => f.type === 'application/pdf' || f.name.toLowerCase().endsWith('.pdf'));
+      if (!files.length) return;
+
+      // keep order: new files appended
+      for (const f of files) {
+        items.push({ id: crypto.randomUUID(), file: f });
+      }
+      setStatus(`${files.length} PDF(s) added. Reorder them, then click “Combine & Download”.`, 'ok');
+      setProgress(0);
+      render();
+    }
+
+    pickBtn.onclick = () => fileInput.click();
+    fileInput.onchange = () => {
+      addFiles(fileInput.files);
+      fileInput.value = ''; // allow selecting same files again
+    };
+
+    // Drag & drop support
+    ['dragenter','dragover'].forEach(ev => dropEl.addEventListener(ev, (e) => {
+      e.preventDefault();
+      dropEl.style.background = 'rgba(110,168,255,.10)';
+      dropEl.style.borderColor = 'rgba(110,168,255,.45)';
+    }));
+    ['dragleave','drop'].forEach(ev => dropEl.addEventListener(ev, (e) => {
+      e.preventDefault();
+      dropEl.style.background = 'rgba(255,255,255,.04)';
+      dropEl.style.borderColor = 'rgba(255,255,255,.22)';
+    }));
+    dropEl.addEventListener('drop', (e) => {
+      addFiles(e.dataTransfer.files);
+    });
+    dropEl.addEventListener('click', () => fileInput.click());
+    dropEl.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' || e.key === ' ') fileInput.click();
+    });
+
+    clearBtn.onclick = () => {
+      items = [];
+      render();
+      setStatus('');
+      setProgress(0);
+    };
+
+    combineBtn.onclick = async () => {
+      if (!items.length) return;
+
+      try {
+        setStatus('Combining PDFs… (this runs locally in your browser)', '');
+        combineBtn.disabled = true;
+        pickBtn.disabled = true;
+        clearBtn.disabled = true;
+
+        const { PDFDocument } = PDFLib;
+        const merged = await PDFDocument.create();
+
+        for (let i = 0; i < items.length; i++) {
+          const f = items[i].file;
+          setStatus(`Reading: ${f.name}`, '');
+          setProgress((i / items.length) * 85);
+
+          const bytes = await f.arrayBuffer();
+          const doc = await PDFDocument.load(bytes, { ignoreEncryption: false });
+
+          const copiedPages = await merged.copyPages(doc, doc.getPageIndices());
+          copiedPages.forEach(p => merged.addPage(p));
+        }
+
+        setStatus('Finalizing merged PDF…', '');
+        setProgress(92);
+
+        const mergedBytes = await merged.save();
+        setProgress(100);
+
+        const blob = new Blob([mergedBytes], { type: 'application/pdf' });
+        const url = URL.createObjectURL(blob);
+
+        const a = document.createElement('a');
+        a.href = url;
+
+        // sanitize filename
+        const name = (outName.value || 'combined.pdf').trim() || 'combined.pdf';
+        a.download = name.toLowerCase().endsWith('.pdf') ? name : (name + '.pdf');
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+
+        URL.revokeObjectURL(url);
+        setStatus('Done! Download should have started.', 'ok');
+      } catch (err) {
+        console.error(err);
+        const msg = String(err?.message || err || 'Unknown error');
+        if (msg.toLowerCase().includes('encrypted')) {
+          setStatus('Error: One of the PDFs appears to be password-protected/encrypted. Please use an unencrypted PDF and try again.', 'err');
+        } else {
+          setStatus('Error while combining PDFs: ' + msg, 'err');
+        }
+      } finally {
+        pickBtn.disabled = false;
+        combineBtn.disabled = items.length === 0;
+        clearBtn.disabled = items.length === 0;
+      }
+    };
+
+    render();
+  </script>
+</body>
+</html>

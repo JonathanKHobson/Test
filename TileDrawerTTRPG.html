@@ -1,0 +1,1860 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Narra-Satchel Tilecaster (Scrabble Bag + D&D Spell Builder)</title>
+
+  <!-- Font Awesome (icons, no emojis). Works online; if you're offline it will gracefully fall back to text. -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" />
+
+  <style>
+    :root{
+      --bg:#0f1216;
+      --panel:#151b22;
+      --panel2:#10151b;
+      --border:#2a3442;
+      --text:#e9edf4;
+      --muted:#a8b3c5;
+      --accent:#59c3ff;
+      --good:#55d48a;
+      --warn:#ffce5c;
+      --bad:#ff6b6b;
+
+      --tile:#f1e5c8;
+      --tileBorder:#cbb98e;
+      --tileText:#1b1b1b;
+      --tileShadow: rgba(0,0,0,.25);
+      --tileBlank:#f7f2e4;
+
+      --radius:16px;
+      --gap:14px;
+
+      --rackMinH: 150px;
+      --builderMinH: 220px;
+      --bagMinH: 90px;
+    }
+
+    *{ box-sizing:border-box; }
+    html,body{ height:100%; }
+    body{
+      margin:0;
+      font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, "Apple Color Emoji","Segoe UI Emoji";
+      background: radial-gradient(1200px 700px at 20% 0%, #1a2230 0%, var(--bg) 55%) fixed;
+      color:var(--text);
+    }
+
+    .wrap{
+      width: min(1600px, 98vw);
+      margin: 18px auto 28px;
+      padding: 0 10px;
+    }
+
+    header{
+      display:flex;
+      align-items:flex-start;
+      justify-content:space-between;
+      gap:12px;
+      margin-bottom: 14px;
+    }
+
+    .titleBlock{
+      display:flex;
+      flex-direction:column;
+      gap:6px;
+    }
+    h1{
+      margin:0;
+      font-size: 20px;
+      letter-spacing:.2px;
+    }
+    .subtitle{
+      color:var(--muted);
+      font-size: 13px;
+      line-height:1.35;
+      max-width: 980px;
+    }
+
+    .toast{
+      position: fixed;
+      right: 14px;
+      bottom: 14px;
+      width: min(420px, 92vw);
+      background: rgba(21,27,34,.92);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 10px 12px;
+      display:none;
+      box-shadow: 0 14px 40px rgba(0,0,0,.35);
+      backdrop-filter: blur(6px);
+      z-index: 9999;
+    }
+    .toast strong{ display:block; margin-bottom:2px; }
+    .toast small{ color: var(--muted); }
+
+    .grid{
+      display:grid;
+      grid-template-columns: 1.05fr 1.35fr;
+      gap: var(--gap);
+      align-items:start;
+    }
+    @media (max-width: 980px){
+      .grid{ grid-template-columns: 1fr; }
+    }
+
+    .card{
+      background: linear-gradient(180deg, rgba(21,27,34,.96), rgba(16,21,27,.96));
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 12px;
+      box-shadow: 0 16px 45px rgba(0,0,0,.28);
+    }
+    .card h2{
+      margin: 0 0 10px;
+      font-size: 14px;
+      letter-spacing:.2px;
+      display:flex;
+      align-items:center;
+      gap:8px;
+    }
+    .card h2 .pill{
+      font-size: 11px;
+      padding: 3px 8px;
+      border-radius: 999px;
+      background: rgba(89,195,255,.12);
+      border: 1px solid rgba(89,195,255,.25);
+      color: #bfe9ff;
+      margin-left: auto;
+    }
+    .row{
+      display:flex;
+      gap:10px;
+      flex-wrap: wrap;
+      align-items:center;
+    }
+
+    label{
+      font-size: 12px;
+      color: var(--muted);
+    }
+
+    input[type="number"], input[type="text"], textarea, select{
+      background: rgba(10,13,17,.8);
+      color: var(--text);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 10px 10px;
+      outline: none;
+      font-size: 14px;
+    }
+    input[type="number"]{ width: 120px; }
+    input[type="text"]{ width: min(520px, 100%); }
+    select{ padding: 10px; }
+
+    textarea{
+      width: 100%;
+      min-height: 98px;
+      resize: vertical;
+      line-height: 1.35;
+    }
+
+    .btn{
+      display:inline-flex;
+      align-items:center;
+      gap:8px;
+      background: rgba(89,195,255,.14);
+      border: 1px solid rgba(89,195,255,.35);
+      color: #d7f2ff;
+      padding: 10px 12px;
+      border-radius: 12px;
+      font-weight: 650;
+      letter-spacing:.15px;
+      cursor:pointer;
+      user-select:none;
+      transition: transform .06s ease, background .12s ease, border-color .12s ease;
+    }
+    .btn:hover{ background: rgba(89,195,255,.18); border-color: rgba(89,195,255,.45); }
+    .btn:active{ transform: translateY(1px); }
+
+    .btn.secondary{
+      background: rgba(255,255,255,.06);
+      border: 1px solid var(--border);
+      color: var(--text);
+      font-weight: 600;
+    }
+    .btn.secondary:hover{ background: rgba(255,255,255,.08); }
+
+    .btn.danger{
+      background: rgba(255,107,107,.12);
+      border-color: rgba(255,107,107,.35);
+      color: #ffd4d4;
+    }
+    .btn.danger:hover{ background: rgba(255,107,107,.16); border-color: rgba(255,107,107,.45); }
+
+    .btn.good{
+      background: rgba(85,212,138,.12);
+      border-color: rgba(85,212,138,.35);
+      color: #c9ffe0;
+    }
+    .btn.good:hover{ background: rgba(85,212,138,.16); border-color: rgba(85,212,138,.45); }
+
+    .miniBtns{
+      display:flex;
+      flex-wrap:wrap;
+      gap:8px;
+    }
+    .mini{
+      padding: 8px 10px;
+      border-radius: 12px;
+      font-size: 13px;
+    }
+
+    .toggle{
+      display:flex;
+      align-items:center;
+      gap:10px;
+      padding: 8px 10px;
+      background: rgba(255,255,255,.04);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+    }
+    .toggle input{ transform: scale(1.15); }
+    .toggle span{ font-size: 13px; color: var(--text); }
+    .toggle small{ color: var(--muted); display:block; font-size: 11px; margin-top: 2px; }
+
+    .stats{
+      display:grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 10px;
+      margin-top: 10px;
+    }
+    .stat{
+      background: rgba(255,255,255,.04);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 10px;
+    }
+    .stat .k{ color: var(--muted); font-size: 11px; }
+    .stat .v{ font-size: 16px; margin-top: 3px; font-weight: 750; letter-spacing:.2px; }
+
+    .zoneTitleRow{
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      gap:10px;
+      margin-bottom: 10px;
+    }
+    .zoneTitleRow .hint{
+      color: var(--muted);
+      font-size: 12px;
+      line-height:1.3;
+    }
+
+    .dropZone{
+      background: rgba(10,13,17,.55);
+      border: 1px dashed rgba(168,179,197,.35);
+      border-radius: 18px;
+      padding: 10px;
+      min-height: 110px;
+      display:flex;
+      flex-wrap: wrap;
+      align-items:flex-start;
+      gap: 10px;
+    }
+    .dropZone.bigRack{ min-height: var(--rackMinH); }
+    .dropZone.bigBuilder{ min-height: var(--builderMinH); }
+    .dropZone.bagZone{ min-height: var(--bagMinH); align-items:center; justify-content:center; flex-wrap:nowrap; }
+    .dropZone.dragOver{
+      border-color: rgba(89,195,255,.7);
+      box-shadow: inset 0 0 0 2px rgba(89,195,255,.18);
+    }
+
+    .tile{
+      width: 64px;
+      height: 64px;
+      background: var(--tile);
+      border: 2px solid var(--tileBorder);
+      border-radius: 14px;
+      box-shadow: 0 7px 14px var(--tileShadow);
+      position: relative;
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      cursor: grab;
+      user-select:none;
+    }
+    .tile:active{ cursor: grabbing; }
+
+    .tile .letter{
+      font-size: 28px;
+      font-weight: 900;
+      color: var(--tileText);
+      letter-spacing: .3px;
+      line-height:1;
+      transform: translateY(-1px);
+    }
+    .tile .points{
+      position:absolute;
+      bottom: 7px;
+      right: 8px;
+      font-size: 13px;
+      font-weight: 900;
+      color: var(--tileText);
+      line-height:1;
+      letter-spacing: .2px;
+      padding-left: 2px; /* helps the Q/10 feel less cramped */
+    }
+
+    .tile.blank{
+      background: var(--tileBlank);
+    }
+    .tile.blank .letter{
+      color: rgba(27,27,27,.82);
+    }
+    .tile.blank.unassigned .letter{
+      font-size: 14px;
+      letter-spacing: .6px;
+      opacity: .75;
+    }
+    .tile.space{
+      background: rgba(241,229,200,.75);
+      border-style: dashed;
+      opacity: .92;
+    }
+    .tile.space .letter{
+      font-size: 18px;
+      opacity: .8;
+    }
+    .tile.space .points{ display:none; }
+
+    .tile.dragging{
+      opacity:.5;
+      transform: rotate(-1deg);
+    }
+
+    .lastDrawStrip{
+      display:flex;
+      flex-wrap: wrap;
+      gap:10px;
+      padding-top: 6px;
+    }
+
+    .divider{
+      height: 1px;
+      background: rgba(255,255,255,.08);
+      margin: 12px 0;
+    }
+
+    .savedList{
+      display:flex;
+      flex-direction:column;
+      gap:10px;
+      max-height: 420px;
+      overflow:auto;
+      padding-right: 4px;
+    }
+    .savedItem{
+      background: rgba(255,255,255,.04);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 10px;
+      display:grid;
+      grid-template-columns: 1fr auto;
+      gap: 10px;
+      align-items:center;
+    }
+    .savedItem .topline{
+      display:flex;
+      flex-direction:column;
+      gap:4px;
+      min-width:0;
+    }
+    .savedItem .phrase{
+      font-weight: 800;
+      letter-spacing:.2px;
+      white-space: nowrap;
+      overflow:hidden;
+      text-overflow: ellipsis;
+    }
+    .savedItem .meta{
+      color: var(--muted);
+      font-size: 12px;
+      display:flex;
+      gap: 10px;
+      flex-wrap:wrap;
+    }
+    .savedActions{
+      display:flex;
+      gap:8px;
+      align-items:center;
+    }
+    .iconBtn{
+      width: 38px;
+      height: 38px;
+      border-radius: 12px;
+      border: 1px solid var(--border);
+      background: rgba(255,255,255,.05);
+      color: var(--text);
+      cursor:pointer;
+      display:inline-flex;
+      align-items:center;
+      justify-content:center;
+      transition: background .12s ease, border-color .12s ease;
+    }
+    .iconBtn:hover{ background: rgba(255,255,255,.08); border-color: rgba(255,255,255,.16); }
+    .iconBtn.danger:hover{ background: rgba(255,107,107,.14); border-color: rgba(255,107,107,.35); }
+    .tag{
+      font-size: 11px;
+      padding: 2px 8px;
+      border-radius: 999px;
+      border: 1px solid rgba(89,195,255,.35);
+      background: rgba(89,195,255,.12);
+      color: #bfe9ff;
+      display:inline-flex;
+      align-items:center;
+      gap:6px;
+      width: fit-content;
+    }
+    .tag.locked{
+      border-color: rgba(255,206,92,.35);
+      background: rgba(255,206,92,.12);
+      color: #ffe7b0;
+    }
+
+    .builderTools{
+      display:flex;
+      justify-content:space-between;
+      gap: 10px;
+      flex-wrap:wrap;
+      margin-top: 10px;
+      align-items:center;
+    }
+    .spaceTool{
+      display:flex;
+      gap:10px;
+      align-items:center;
+      flex-wrap:wrap;
+    }
+    .spacePalette{
+      display:flex;
+      align-items:center;
+      gap:10px;
+      padding: 8px 10px;
+      border-radius: 14px;
+      border: 1px solid var(--border);
+      background: rgba(255,255,255,.04);
+    }
+    .spacePalette .spaceToken{
+      width: 48px; height: 48px;
+      border-radius: 12px;
+      border: 2px dashed rgba(203,185,142,.9);
+      background: rgba(241,229,200,.7);
+      display:flex; align-items:center; justify-content:center;
+      color: rgba(27,27,27,.8);
+      font-weight: 900;
+      cursor: grab;
+      user-select:none;
+    }
+    .spacePalette .spaceToken:active{ cursor: grabbing; }
+    .spacePalette .cap{
+      display:flex; flex-direction:column; gap:2px;
+    }
+    .spacePalette .cap b{ font-size: 12px; }
+    .spacePalette .cap small{ font-size: 11px; color: var(--muted); }
+
+    .spellPanel{
+      display:none;
+    }
+    .spellPanel.on{
+      display:block;
+    }
+    .spellGrid{
+      display:grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+      margin-top: 8px;
+    }
+    @media (max-width: 560px){
+      .spellGrid{ grid-template-columns: 1fr; }
+    }
+    .kv{
+      background: rgba(255,255,255,.04);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 10px;
+    }
+    .kv .k{ color: var(--muted); font-size: 11px; }
+    .kv .v{ font-size: 16px; font-weight: 850; margin-top: 2px; }
+
+    .modalBackdrop{
+      position:fixed;
+      inset:0;
+      background: rgba(0,0,0,.55);
+      display:none;
+      align-items:center;
+      justify-content:center;
+      z-index: 10000;
+      padding: 18px;
+    }
+    .modal{
+      width: min(720px, 96vw);
+      background: rgba(21,27,34,.98);
+      border: 1px solid var(--border);
+      border-radius: 18px;
+      box-shadow: 0 26px 70px rgba(0,0,0,.5);
+      padding: 12px;
+    }
+    .modalHeader{
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      gap:10px;
+      margin-bottom: 10px;
+    }
+    .modalHeader h3{
+      margin:0;
+      font-size: 14px;
+      letter-spacing:.2px;
+    }
+    .letterGrid{
+      display:grid;
+      grid-template-columns: repeat(13, 1fr);
+      gap: 8px;
+    }
+    @media (max-width: 720px){
+      .letterGrid{ grid-template-columns: repeat(7, 1fr); }
+    }
+    .letterPick{
+      background: rgba(255,255,255,.06);
+      border: 1px solid var(--border);
+      color: var(--text);
+      border-radius: 12px;
+      padding: 10px 0;
+      cursor:pointer;
+      font-weight: 900;
+      text-align:center;
+    }
+    .letterPick:hover{
+      background: rgba(89,195,255,.16);
+      border-color: rgba(89,195,255,.45);
+    }
+    .letterPick.clear{
+      grid-column: span 2;
+      background: rgba(255,206,92,.12);
+      border-color: rgba(255,206,92,.3);
+      color: #ffe7b0;
+    }
+    .letterPick.clear:hover{
+      background: rgba(255,206,92,.16);
+      border-color: rgba(255,206,92,.45);
+    }
+
+    .smallNote{
+      color: var(--muted);
+      font-size: 12px;
+      line-height:1.35;
+    }
+
+    .kbd{
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+      font-size: 11px;
+      padding: 2px 6px;
+      border-radius: 8px;
+      border: 1px solid rgba(255,255,255,.14);
+      background: rgba(255,255,255,.06);
+      color: #dfe7f5;
+    }
+  </style>
+</head>
+
+<body>
+  <div class="wrap">
+    <header>
+      <div class="titleBlock">
+        <h1>Narra-Satchel Tilecaster</h1>
+        <div class="subtitle">
+          Draw letters from a true Scrabble-distributed bag, drag them into a builder, add spaces, save phrases, and (optionally)
+          run it as a D&D spellcasting “word-magic” engine. <span class="kbd">Double-click BLANK</span> to assign a letter.
+          <span class="kbd">Double-click SPACE</span> to delete it.
+        </div>
+      </div>
+    </header>
+
+    <div class="grid">
+      <!-- LEFT COLUMN -->
+      <div class="col">
+        <div class="card" id="drawCard">
+          <h2>
+            <i class="fa-solid fa-dice"></i>
+            Draw & Bag Controls
+            <span class="pill" id="modePill">Persistent Bag: ON</span>
+          </h2>
+
+          <div class="row">
+            <div style="display:flex; flex-direction:column; gap:6px;">
+              <label for="drawCount">Tiles to draw</label>
+              <input id="drawCount" type="number" min="1" max="100" value="7" />
+            </div>
+
+            <button class="btn" id="drawBtn" title="Draw tiles into your Rack">
+              <i class="fa-solid fa-hand-sparkles"></i> Draw
+            </button>
+
+            <button class="btn secondary" id="undoBtn" title="Undo the last change (true state restore)">
+              <i class="fa-solid fa-rotate-left"></i> Undo
+            </button>
+
+            <button class="btn secondary" id="resetBagBtn" title="Reset the bag back to a full Scrabble distribution (100 tiles)">
+              <i class="fa-solid fa-arrows-rotate"></i> Reset Bag
+            </button>
+
+            <div class="toggle" title="When ON, draws remove letters from the bag and never auto-wipe your Rack/Builder.">
+              <input id="persistToggle" type="checkbox" checked />
+              <div>
+                <span><b>Persistent bag</b></span>
+                <small>ON by default (true bag economy).</small>
+              </div>
+            </div>
+          </div>
+
+          <div class="divider"></div>
+
+          <div class="row" style="justify-content:space-between;">
+            <div>
+              <label style="display:block; margin-bottom:6px;">Quick dice draw (D&D helper)</label>
+              <div class="miniBtns" id="diceBtns"></div>
+              <div class="smallNote" style="margin-top:8px;">
+                Clicking a die button rolls <b>Nd6</b> and draws that many tiles (also sets “Dice used” in Spellcasting Mode).
+              </div>
+            </div>
+
+            <div class="toggle" style="max-width: 420px;" title="Turn on D&D spellcasting helpers: scoring, DC suggestion, resolve card, typeset spells.">
+              <input id="spellModeToggle" type="checkbox" />
+              <div>
+                <span><b>Spellcasting Mode</b></span>
+                <small>D&D helper panel + “Typeset spells”.</small>
+              </div>
+            </div>
+          </div>
+
+          <div class="stats">
+            <div class="stat">
+              <div class="k">Bag remaining</div>
+              <div class="v" id="bagRemaining">100</div>
+            </div>
+            <div class="stat">
+              <div class="k">Rack tiles</div>
+              <div class="v" id="rackCount">0</div>
+            </div>
+            <div class="stat">
+              <div class="k">Builder points</div>
+              <div class="v" id="builderPoints">0</div>
+            </div>
+          </div>
+
+          <div class="divider"></div>
+
+          <div>
+            <label style="display:block; margin-bottom:6px;">Last draw</label>
+            <div class="lastDrawStrip" id="lastDrawStrip"></div>
+          </div>
+
+          <div class="divider"></div>
+
+          <div class="row" style="justify-content:space-between;">
+            <label>Text output (copy/paste)</label>
+            <button class="btn secondary mini" id="copyTextBtn" title="Copy the text output below to clipboard">
+              <i class="fa-solid fa-copy"></i> Copy
+            </button>
+          </div>
+          <textarea id="textOut" readonly></textarea>
+          <div class="smallNote" style="margin-top:8px;">
+            Output reflects the Builder phrase if present; otherwise it reflects your Rack.
+          </div>
+        </div>
+
+        <!-- SPELL PANEL -->
+        <div class="card spellPanel" id="spellPanel">
+          <h2>
+            <i class="fa-solid fa-wand-magic-sparkles"></i>
+            Spellcasting Helper
+            <span class="pill">D&D Mode</span>
+          </h2>
+
+          <div class="row">
+            <div style="display:flex; flex-direction:column; gap:6px;">
+              <label for="diceUsed">Dice used</label>
+              <input id="diceUsed" type="number" min="1" max="6" value="1" />
+            </div>
+
+            <div style="display:flex; flex-direction:column; gap:6px;">
+              <label for="complexity">Complexity</label>
+              <select id="complexity">
+                <option value="0">0 — trivial</option>
+                <option value="2" selected>2 — simple</option>
+                <option value="4">4 — moderate</option>
+                <option value="6">6 — major</option>
+              </select>
+            </div>
+
+            <div style="display:flex; flex-direction:column; gap:6px; flex:1; min-width: 240px;">
+              <label for="intent">Intent (what you're trying to do)</label>
+              <input id="intent" type="text" placeholder="e.g., MEND a wound, HUSH a hallway, OPEN a lock…" />
+            </div>
+          </div>
+
+          <div class="spellGrid">
+            <div class="kv">
+              <div class="k">Word Score (WS)</div>
+              <div class="v" id="wsOut">0</div>
+            </div>
+            <div class="kv">
+              <div class="k">Power Steps (PS)</div>
+              <div class="v" id="psOut">1</div>
+            </div>
+            <div class="kv">
+              <div class="k">Suggested DC</div>
+              <div class="v" id="dcOut">12</div>
+            </div>
+            <div class="kv">
+              <div class="k">Builder tiles</div>
+              <div class="v" id="btOut">0</div>
+            </div>
+          </div>
+
+          <div class="divider"></div>
+
+          <div class="row" style="justify-content:space-between;">
+            <button class="btn good" id="resolveBtn" title="Generate a chat-ready resolve card from your current Builder phrase">
+              <i class="fa-solid fa-scroll"></i> Resolve Card
+            </button>
+
+            <button class="btn secondary" id="copyResolveBtn" title="Copy the resolve card to clipboard">
+              <i class="fa-solid fa-copy"></i> Copy Card
+            </button>
+          </div>
+
+          <textarea id="resolveOut" readonly placeholder="Resolve card appears here…"></textarea>
+          <div class="smallNote" style="margin-top:8px;">
+            “PS” uses: <b>PS = diceUsed + floor(WS/10)</b>, capped at 9. “DC” uses: <b>DC = 10 + 2×diceUsed + complexity</b>.
+          </div>
+        </div>
+
+        <div class="card" id="savedCard">
+          <h2>
+            <i class="fa-solid fa-bookmark"></i>
+            Saved Phrases
+            <span class="pill" id="savedPill">0 saved</span>
+          </h2>
+          <div class="smallNote" style="margin-bottom:10px;">
+            Saved phrases remove those tiles from play (bag economy). Use the icons to move them back to Builder/Rack or return letters to the bag.
+          </div>
+          <div class="savedList" id="savedList"></div>
+        </div>
+      </div>
+
+      <!-- RIGHT COLUMN -->
+      <div class="col">
+        <div class="card">
+          <div class="zoneTitleRow">
+            <div>
+              <h2 style="margin:0;">
+                <i class="fa-solid fa-grip-lines"></i>
+                Rack
+              </h2>
+              <div class="hint">Drag tiles to reorder, or drag into the Word Builder.</div>
+            </div>
+            <div class="row">
+              <button class="btn secondary mini" id="clearRackBtn" title="Return all Rack letters to the bag (spaces delete)">
+                <i class="fa-solid fa-bag-shopping"></i> Return Rack
+              </button>
+            </div>
+          </div>
+
+          <div id="rackZone" class="dropZone bigRack" aria-label="Rack drop zone"></div>
+        </div>
+
+        <div class="card" style="margin-top: var(--gap);">
+          <div class="zoneTitleRow">
+            <div>
+              <h2 style="margin:0;">
+                <i class="fa-solid fa-pen-nib"></i>
+                Word Builder
+              </h2>
+              <div class="hint">Build a word/phrase. Spaces can be dragged in or added. Double-click SPACE to delete.</div>
+            </div>
+            <div class="row">
+              <button class="btn good mini" id="saveBuilderBtn" title="Save the Builder phrase (locks tiles into Saved Phrases)">
+                <i class="fa-solid fa-bookmark"></i> Save
+              </button>
+
+              <button class="btn secondary mini" id="typesetBtn" style="display:none;" title="Typeset the Builder phrase (locks it as a reusable spell in Spellcasting Mode)">
+                <i class="fa-solid fa-lock"></i> Typeset
+              </button>
+
+              <button class="btn secondary mini" id="clearBuilderBtn" title="Move Builder tiles back to Rack (spaces delete)">
+                <i class="fa-solid fa-eraser"></i> Clear
+              </button>
+
+              <button class="btn danger mini" id="returnAllBtn" title="Return all Rack+Builder letters to the bag (spaces delete)">
+                <i class="fa-solid fa-arrow-rotate-left"></i> Return All
+              </button>
+            </div>
+          </div>
+
+          <div id="builderZone" class="dropZone bigBuilder" aria-label="Word Builder drop zone"></div>
+
+          <div class="builderTools">
+            <div class="spaceTool">
+              <div class="spacePalette" title="Drag the space token into the Builder to insert a space.">
+                <div class="spaceToken" id="spaceToken" draggable="true" aria-label="Drag space into builder">␠</div>
+                <div class="cap">
+                  <b>Space</b>
+                  <small>Drag into Builder to insert</small>
+                </div>
+              </div>
+
+              <button class="btn secondary mini" id="addSpaceBtn" title="Add a space into the Builder (at the end)">
+                <i class="fa-solid fa-plus"></i> Add Space
+              </button>
+            </div>
+
+            <div class="smallNote">
+              Tip: drop tiles onto a tile to insert before/after it. Drop onto empty space to append.
+            </div>
+          </div>
+        </div>
+
+        <div class="card" style="margin-top: var(--gap);">
+          <div class="zoneTitleRow">
+            <div>
+              <h2 style="margin:0;">
+                <i class="fa-solid fa-bag-shopping"></i>
+                Return to Bag
+              </h2>
+              <div class="hint">Drop tiles here to return letters to the bag. Spaces get deleted.</div>
+            </div>
+          </div>
+          <div id="bagZone" class="dropZone bagZone" aria-label="Return to Bag drop zone">
+            <div class="smallNote" style="text-align:center;">
+              Drop here to return letters to the bag<br/>
+              <span class="kbd">SPACE</span> deletes
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- BLANK ASSIGNMENT MODAL -->
+  <div class="modalBackdrop" id="blankModalBackdrop" role="dialog" aria-modal="true">
+    <div class="modal">
+      <div class="modalHeader">
+        <h3><i class="fa-solid fa-square"></i> Assign BLANK tile</h3>
+        <button class="iconBtn" id="closeBlankModal" title="Close">
+          <i class="fa-solid fa-xmark"></i>
+        </button>
+      </div>
+      <div class="smallNote" style="margin-bottom:10px;">
+        Choose a letter for this BLANK tile. You can change it anytime while it’s in your Rack or Builder.
+      </div>
+      <div class="letterGrid" id="letterGrid"></div>
+    </div>
+  </div>
+
+  <div class="toast" id="toast">
+    <strong id="toastTitle"></strong>
+    <small id="toastMsg"></small>
+  </div>
+
+<script>
+/* ============================
+   DATA: SCRABBLE DISTRIBUTION
+   ============================ */
+const SCRABBLE_COUNTS = {
+  A:9, B:2, C:2, D:4, E:12, F:2, G:3, H:2, I:9, J:1, K:1, L:4, M:2, N:6,
+  O:8, P:2, Q:1, R:6, S:4, T:6, U:4, V:2, W:2, X:1, Y:2, Z:1, "_":2 // "_" = blank
+};
+
+const SCRABBLE_POINTS = {
+  A:1, B:3, C:3, D:2, E:1, F:4, G:2, H:4, I:1, J:8, K:5, L:1, M:3, N:1,
+  O:1, P:3, Q:10, R:1, S:1, T:1, U:1, V:4, W:4, X:8, Y:4, Z:10, "_":0
+};
+
+const MAX_HISTORY = 60;
+
+function uid(){
+  return Math.random().toString(16).slice(2) + "-" + Date.now().toString(16);
+}
+
+function makeTile(letter){
+  const isBlank = (letter === "_");
+  return {
+    id: uid(),
+    type: "tile",         // "tile" or "space"
+    letter: isBlank ? "_" : letter,
+    points: SCRABBLE_POINTS[letter],
+    isBlank,
+    blankAssigned: null   // set to "A".."Z" if chosen
+  };
+}
+
+function makeSpace(){
+  return { id: uid(), type: "space" };
+}
+
+function initFullBag(){
+  const bag = [];
+  for (const [ch,count] of Object.entries(SCRABBLE_COUNTS)){
+    for (let i=0;i<count;i++) bag.push(makeTile(ch));
+  }
+  return bag;
+}
+
+/* ============================
+   STATE + HISTORY (UNDO)
+   ============================ */
+const state = {
+  bag: initFullBag(),
+  rack: [],
+  builder: [],
+  saved: [], // {id, tiles: TileOrSpace[], typeset:boolean, createdAt:number}
+  lastDrawIds: [],
+  settings: {
+    persistent: true,
+    spellMode: false,
+    diceUsed: 1,
+    complexity: 2,
+    intent: ""
+  }
+};
+
+let history = [];
+let dragPayload = null;
+let activeBlankTileId = null;
+
+function deepClone(obj){
+  // structuredClone is ideal; fall back to JSON where supported objects are simple
+  if (typeof structuredClone === "function") return structuredClone(obj);
+  return JSON.parse(JSON.stringify(obj));
+}
+
+function pushHistory(){
+  history.push(deepClone({
+    bag: state.bag,
+    rack: state.rack,
+    builder: state.builder,
+    saved: state.saved,
+    lastDrawIds: state.lastDrawIds,
+    settings: state.settings
+  }));
+  if (history.length > MAX_HISTORY) history.shift();
+}
+
+function restoreFromSnapshot(snap){
+  state.bag = snap.bag;
+  state.rack = snap.rack;
+  state.builder = snap.builder;
+  state.saved = snap.saved;
+  state.lastDrawIds = snap.lastDrawIds;
+  state.settings = snap.settings;
+}
+
+function undo(){
+  if (!history.length){
+    toast("Nothing to undo", "You’re at the beginning of your timeline.");
+    return;
+  }
+  const snap = history.pop();
+  restoreFromSnapshot(snap);
+  renderAll();
+}
+
+/* ============================
+   HELPERS: TILE TEXT / SCORING
+   ============================ */
+function tileChar(t){
+  if (t.type === "space") return " ";
+  if (t.type === "tile" && t.isBlank){
+    return t.blankAssigned ? t.blankAssigned : "_";
+  }
+  return t.letter;
+}
+
+function phraseFromTiles(arr){
+  return arr.map(tileChar).join("");
+}
+
+function wsFromBuilder(){
+  let ws = 0;
+  for (const t of state.builder){
+    if (t.type === "tile") ws += (t.isBlank ? 0 : t.points);
+  }
+  return ws;
+}
+
+function builderPoints(){
+  let pts = 0;
+  for (const t of state.builder){
+    if (t.type === "tile") pts += (t.isBlank ? 0 : t.points);
+  }
+  return pts;
+}
+
+function builderTileCount(){
+  return state.builder.filter(t => t.type === "tile").length;
+}
+
+function computePS(){
+  const dice = clampInt(state.settings.diceUsed, 1, 6);
+  const ws = wsFromBuilder();
+  const psRaw = dice + Math.floor(ws / 10);
+  return Math.min(9, Math.max(1, psRaw));
+}
+
+function computeDC(){
+  const dice = clampInt(state.settings.diceUsed, 1, 6);
+  const cx = Number(state.settings.complexity) || 0;
+  return 10 + (2 * dice) + cx;
+}
+
+function clampInt(n, min, max){
+  const v = Math.floor(Number(n));
+  if (Number.isNaN(v)) return min;
+  return Math.min(max, Math.max(min, v));
+}
+
+/* ============================
+   DRAWING
+   ============================ */
+function drawTiles(n){
+  n = clampInt(n, 1, 100);
+
+  pushHistory();
+
+  const drawn = [];
+  state.lastDrawIds = [];
+
+  if (state.settings.persistent){
+    if (state.bag.length < n){
+      toast("Bag too small", `Only ${state.bag.length} tiles remain in the bag.`);
+      return;
+    }
+    for (let i=0;i<n;i++){
+      const idx = Math.floor(Math.random() * state.bag.length);
+      const t = state.bag.splice(idx, 1)[0];
+      state.rack.push(t);
+      drawn.push(t);
+      state.lastDrawIds.push(t.id);
+    }
+  } else {
+    // Non-persistent: weighted draw with replacement from a template, but still creates unique tile objects
+    const template = [];
+    for (const [ch,count] of Object.entries(SCRABBLE_COUNTS)){
+      for (let i=0;i<count;i++) template.push(ch);
+    }
+    for (let i=0;i<n;i++){
+      const idx = Math.floor(Math.random() * template.length);
+      const ch = template[idx];
+      const t = makeTile(ch);
+      state.rack.push(t);
+      drawn.push(t);
+      state.lastDrawIds.push(t.id);
+    }
+  }
+
+  toast("Draw complete", `Added ${n} tile(s) to your Rack.`);
+  renderAll();
+}
+
+/* ============================
+   MOVE / INSERT / REMOVE
+   ============================ */
+function removeTileFromZone(tileId, zoneArr){
+  const idx = zoneArr.findIndex(t => t.id === tileId);
+  if (idx === -1) return null;
+  return zoneArr.splice(idx, 1)[0];
+}
+
+function insertIntoZone(tile, zoneArr, index){
+  const i = clampInt(index, 0, zoneArr.length);
+  zoneArr.splice(i, 0, tile);
+}
+
+function findInsertIndex(container, evt){
+  const targetTile = evt.target.closest(".tile");
+  if (!targetTile || !container.contains(targetTile)) return container.querySelectorAll(".tile").length;
+
+  const id = targetTile.dataset.id;
+  const rect = targetTile.getBoundingClientRect();
+  const before = evt.clientX < rect.left + rect.width / 2;
+  const tiles = Array.from(container.querySelectorAll(".tile")).map(el => el.dataset.id);
+  const idx = tiles.indexOf(id);
+  if (idx === -1) return tiles.length;
+  return before ? idx : idx + 1;
+}
+
+function zoneFromEl(el){
+  if (!el) return null;
+  if (el.id === "rackZone") return "rack";
+  if (el.id === "builderZone") return "builder";
+  if (el.id === "bagZone") return "bag";
+  return null;
+}
+
+function getZoneArray(zoneName){
+  if (zoneName === "rack") return state.rack;
+  if (zoneName === "builder") return state.builder;
+  return null;
+}
+
+function dropTile(payload, destZone, insertIndex){
+  // payload: {kind:"tile", tileId, fromZone} or {kind:"spaceTemplate"}
+  if (!payload) return;
+
+  pushHistory();
+
+  if (payload.kind === "spaceTemplate"){
+    if (destZone !== "builder"){
+      toast("Space ignored", "Spaces can only be inserted into the Word Builder.");
+      return;
+    }
+    const sp = makeSpace();
+    insertIntoZone(sp, state.builder, insertIndex);
+    renderAll();
+    return;
+  }
+
+  if (payload.kind === "tile"){
+    const fromZone = payload.fromZone;
+    const tileId = payload.tileId;
+
+    let tileObj = null;
+
+    if (fromZone === "rack") tileObj = removeTileFromZone(tileId, state.rack);
+    if (fromZone === "builder") tileObj = removeTileFromZone(tileId, state.builder);
+
+    if (!tileObj){
+      // If something goes weird, don’t destroy state
+      toast("Drag error", "Couldn’t find that tile in its source zone.");
+      undo(); // revert this pushHistory
+      return;
+    }
+
+    if (destZone === "bag"){
+      // Space tiles "delete", letter tiles return to bag (unless non-persistent, where bag is not meaningful)
+      if (tileObj.type === "space"){
+        renderAll();
+        return;
+      }
+      if (state.settings.persistent){
+        state.bag.push(tileObj);
+      } else {
+        // non-persistent mode: bag is conceptual; we just drop it from play
+      }
+      renderAll();
+      return;
+    }
+
+    if (destZone === "rack"){
+      insertIntoZone(tileObj, state.rack, insertIndex);
+      renderAll();
+      return;
+    }
+
+    if (destZone === "builder"){
+      insertIntoZone(tileObj, state.builder, insertIndex);
+      renderAll();
+      return;
+    }
+  }
+}
+
+/* ============================
+   SAVING / TYPESETTING
+   ============================ */
+function saveBuilder({typeset=false} = {}){
+  if (state.builder.length === 0){
+    toast("Nothing to save", "Your Word Builder is empty.");
+    return;
+  }
+
+  pushHistory();
+
+  const tiles = state.builder.splice(0, state.builder.length);
+  const phrase = phraseFromTiles(tiles);
+  const points = tiles.reduce((sum,t)=> sum + (t.type==="tile" ? (t.isBlank?0:t.points) : 0), 0);
+  const tileCount = tiles.filter(t=>t.type==="tile").length;
+
+  state.saved.unshift({
+    id: uid(),
+    tiles,
+    typeset: !!typeset,
+    createdAt: Date.now(),
+    meta: { phrase, points, tileCount }
+  });
+
+  toast(typeset ? "Typeset saved" : "Saved", `“${phrase || "(empty)"}” moved into Saved Phrases.`);
+  renderAll();
+}
+
+function savedMoveTo(zone, savedId){
+  const idx = state.saved.findIndex(s => s.id === savedId);
+  if (idx === -1) return;
+
+  pushHistory();
+
+  const entry = state.saved.splice(idx,1)[0];
+
+  if (zone === "builder"){
+    // Move tiles into builder (spaces preserved)
+    state.builder.push(...entry.tiles);
+    renderAll();
+    return;
+  }
+
+  if (zone === "rack"){
+    // Move only tiles into rack; spaces are allowed in rack? better to keep them out
+    for (const t of entry.tiles){
+      if (t.type === "tile") state.rack.push(t);
+      // spaces are dropped (deleted)
+    }
+    renderAll();
+    return;
+  }
+
+  if (zone === "bag"){
+    // Return letters to bag; spaces delete
+    if (state.settings.persistent){
+      for (const t of entry.tiles){
+        if (t.type === "tile") state.bag.push(t);
+      }
+    }
+    renderAll();
+    return;
+  }
+}
+
+function releaseTypeset(savedId){
+  const idx = state.saved.findIndex(s => s.id === savedId);
+  if (idx === -1) return;
+
+  pushHistory();
+
+  const entry = state.saved.splice(idx, 1)[0];
+  if (state.settings.persistent){
+    for (const t of entry.tiles){
+      if (t.type === "tile") state.bag.push(t);
+    }
+  }
+  toast("Released", "Typeset tiles returned to the bag.");
+  renderAll();
+}
+
+/* ============================
+   CLEAR / RETURN
+   ============================ */
+function clearBuilderToRack(){
+  if (!state.builder.length) return;
+
+  pushHistory();
+
+  const moved = state.builder.splice(0, state.builder.length);
+  for (const t of moved){
+    if (t.type === "tile") state.rack.push(t);
+    // spaces delete
+  }
+  renderAll();
+}
+
+function clearRackToBag(){
+  if (!state.rack.length) return;
+
+  pushHistory();
+
+  const moved = state.rack.splice(0, state.rack.length);
+  if (state.settings.persistent){
+    for (const t of moved){
+      if (t.type === "tile") state.bag.push(t);
+    }
+  }
+  renderAll();
+}
+
+function returnAllToBag(){
+  if (!state.rack.length && !state.builder.length) return;
+
+  pushHistory();
+
+  const movedRack = state.rack.splice(0, state.rack.length);
+  const movedBuilder = state.builder.splice(0, state.builder.length);
+
+  if (state.settings.persistent){
+    for (const t of [...movedRack, ...movedBuilder]){
+      if (t.type === "tile") state.bag.push(t);
+    }
+  }
+  renderAll();
+}
+
+/* ============================
+   SPACES + BLANK ASSIGNMENT
+   ============================ */
+function addSpaceToBuilder(){
+  pushHistory();
+  state.builder.push(makeSpace());
+  renderAll();
+}
+
+function deleteTileInBuilder(tileId){
+  const idx = state.builder.findIndex(t => t.id === tileId);
+  if (idx === -1) return;
+
+  pushHistory();
+  const t = state.builder[idx];
+  if (t.type === "space"){
+    state.builder.splice(idx, 1);
+    renderAll();
+  }
+}
+
+function openBlankModal(tileId){
+  activeBlankTileId = tileId;
+  document.getElementById("blankModalBackdrop").style.display = "flex";
+}
+
+function closeBlankModal(){
+  activeBlankTileId = null;
+  document.getElementById("blankModalBackdrop").style.display = "none";
+}
+
+function assignBlank(letterOrNull){
+  if (!activeBlankTileId) return;
+
+  // Only allow editing blanks in rack or builder
+  const tRack = state.rack.find(t => t.id === activeBlankTileId);
+  const tBuilder = state.builder.find(t => t.id === activeBlankTileId);
+  const t = tRack || tBuilder;
+  if (!t || !t.isBlank){
+    closeBlankModal();
+    return;
+  }
+
+  pushHistory();
+  t.blankAssigned = letterOrNull;
+  closeBlankModal();
+  renderAll();
+}
+
+/* ============================
+   SPELL PANEL OUTPUT
+   ============================ */
+function updateSpellNumbers(){
+  const ws = wsFromBuilder();
+  const ps = computePS();
+  const dc = computeDC();
+  document.getElementById("wsOut").textContent = ws;
+  document.getElementById("psOut").textContent = ps;
+  document.getElementById("dcOut").textContent = dc;
+  document.getElementById("btOut").textContent = builderTileCount();
+}
+
+function buildResolveCard(){
+  const phrase = phraseFromTiles(state.builder).trimEnd(); // keep internal spaces but avoid trailing
+  const ws = wsFromBuilder();
+  const ps = computePS();
+  const dc = computeDC();
+  const diceUsed = clampInt(state.settings.diceUsed, 1, 6);
+  const cx = Number(state.settings.complexity) || 0;
+  const intent = (state.settings.intent || "").trim();
+
+  const lastDrawTiles = state.lastDrawIds
+    .map(id => state.rack.find(t => t.id === id))
+    .filter(Boolean);
+
+  const lastDrawText = lastDrawTiles.length
+    ? lastDrawTiles.map(t => (t.isBlank ? ("_" + (t.blankAssigned ? `(${t.blankAssigned})` : "")) : t.letter) + `(${t.isBlank?0:t.points})`).join(" ")
+    : "(none)";
+
+  const builderTileText = state.builder
+    .filter(t => t.type === "tile")
+    .map(t => (t.isBlank ? ("_" + (t.blankAssigned ? `(${t.blankAssigned})` : "")) : t.letter) + `(${t.isBlank?0:t.points})`).join(" ");
+
+  const out =
+`NARRA-SATCHEL CAST
+Intent: ${intent || "(not stated)"}
+Dice used: ${diceUsed}d6    Complexity: ${cx}
+Phrase: "${phrase || "(empty)"}"
+
+Builder tiles: ${builderTileText || "(none)"} 
+Word Score (WS): ${ws}
+Power Steps (PS): ${ps}   (PS = diceUsed + floor(WS/10), cap 9)
+Suggested DC: ${dc}       (DC = 10 + 2×diceUsed + complexity)
+
+Last draw: ${lastDrawText}
+Bag remaining: ${state.settings.persistent ? state.bag.length : "∞ (non-persistent)"}`
+;
+  return out;
+}
+
+/* ============================
+   RENDERING
+   ============================ */
+const rackZone = document.getElementById("rackZone");
+const builderZone = document.getElementById("builderZone");
+const bagZone = document.getElementById("bagZone");
+const lastDrawStrip = document.getElementById("lastDrawStrip");
+const textOut = document.getElementById("textOut");
+const savedList = document.getElementById("savedList");
+
+function renderZone(zoneEl, tiles, zoneName){
+  zoneEl.innerHTML = "";
+  for (const t of tiles){
+    const el = document.createElement("div");
+    el.className = "tile";
+    el.dataset.id = t.id;
+    el.draggable = true;
+
+    if (t.type === "space"){
+      el.classList.add("space");
+      el.innerHTML = `<div class="letter">␠</div>`;
+      el.title = "SPACE (double-click to delete, or drop into bag to delete)";
+    } else {
+      if (t.isBlank){
+        el.classList.add("blank");
+        if (!t.blankAssigned) el.classList.add("unassigned");
+        const shown = t.blankAssigned ? t.blankAssigned : "BLANK";
+        el.innerHTML = `<div class="letter">${shown}</div><div class="points">0</div>`;
+        el.title = t.blankAssigned
+          ? `BLANK assigned to ${t.blankAssigned} (double-click to change)`
+          : "BLANK (double-click to assign a letter)";
+      } else {
+        el.innerHTML = `<div class="letter">${t.letter}</div><div class="points">${t.points}</div>`;
+        el.title = `${t.letter} (${t.points})`;
+      }
+    }
+
+    // Drag events
+    el.addEventListener("dragstart", (e) => {
+      dragPayload = { kind:"tile", tileId: t.id, fromZone: zoneName };
+      try { e.dataTransfer.setData("text/plain", JSON.stringify(dragPayload)); } catch {}
+      e.dataTransfer.effectAllowed = "move";
+      el.classList.add("dragging");
+    });
+
+    el.addEventListener("dragend", () => {
+      el.classList.remove("dragging");
+      dragPayload = null;
+      rackZone.classList.remove("dragOver");
+      builderZone.classList.remove("dragOver");
+      bagZone.classList.remove("dragOver");
+    });
+
+    // Double-click behaviors
+    el.addEventListener("dblclick", () => {
+      if (t.type === "space"){
+        if (zoneName === "builder") deleteTileInBuilder(t.id);
+        return;
+      }
+      if (t.type === "tile" && t.isBlank){
+        if (zoneName === "rack" || zoneName === "builder"){
+          openBlankModal(t.id);
+        } else {
+          toast("Edit blanks in play", "Return the phrase to Builder/Rack if you want to re-assign blanks.");
+        }
+      }
+    });
+
+    zoneEl.appendChild(el);
+  }
+}
+
+function renderLastDraw(){
+  lastDrawStrip.innerHTML = "";
+  const ids = state.lastDrawIds.slice();
+  const tiles = ids.map(id => state.rack.find(t => t.id === id)).filter(Boolean);
+  for (const t of tiles){
+    const mini = document.createElement("div");
+    mini.className = "tile" + (t.isBlank ? " blank" : "");
+    mini.style.width = "54px";
+    mini.style.height = "54px";
+    mini.style.borderRadius = "13px";
+    mini.style.boxShadow = "0 6px 12px rgba(0,0,0,.25)";
+
+    if (t.isBlank){
+      const shown = t.blankAssigned ? t.blankAssigned : "BLANK";
+      mini.innerHTML = `<div class="letter" style="font-size:${t.blankAssigned ? "26px" : "12px"}">${shown}</div><div class="points">0</div>`;
+    } else {
+      mini.innerHTML = `<div class="letter" style="font-size:26px">${t.letter}</div><div class="points">${t.points}</div>`;
+    }
+    lastDrawStrip.appendChild(mini);
+  }
+}
+
+function renderSaved(){
+  savedList.innerHTML = "";
+
+  document.getElementById("savedPill").textContent = `${state.saved.length} saved`;
+
+  if (state.saved.length === 0){
+    const empty = document.createElement("div");
+    empty.className = "smallNote";
+    empty.textContent = "No saved phrases yet. Build something in the Word Builder, then press Save (or Typeset in Spellcasting Mode).";
+    savedList.appendChild(empty);
+    return;
+  }
+
+  for (const entry of state.saved){
+    const phrase = phraseFromTiles(entry.tiles);
+    const points = entry.tiles.reduce((sum,t)=> sum + (t.type==="tile" ? (t.isBlank?0:t.points) : 0), 0);
+    const tileCount = entry.tiles.filter(t=>t.type==="tile").length;
+
+    const item = document.createElement("div");
+    item.className = "savedItem";
+
+    const left = document.createElement("div");
+    left.className = "topline";
+
+    const tag = document.createElement("div");
+    tag.className = "tag" + (entry.typeset ? " locked" : "");
+    tag.innerHTML = entry.typeset
+      ? `<i class="fa-solid fa-lock"></i> Typeset Spell`
+      : `<i class="fa-solid fa-bookmark"></i> Draft Saved`;
+
+    const phraseEl = document.createElement("div");
+    phraseEl.className = "phrase";
+    phraseEl.textContent = phrase.length ? phrase : "(empty)";
+
+    const meta = document.createElement("div");
+    meta.className = "meta";
+    meta.innerHTML = `
+      <span><i class="fa-solid fa-star"></i> ${points} pts</span>
+      <span><i class="fa-solid fa-font"></i> ${tileCount} tiles</span>
+      <span><i class="fa-solid fa-ellipsis"></i> ${Math.max(0, entry.tiles.length - tileCount)} spaces</span>
+    `;
+
+    left.appendChild(tag);
+    left.appendChild(phraseEl);
+    left.appendChild(meta);
+
+    const actions = document.createElement("div");
+    actions.className = "savedActions";
+
+    // Move to Builder
+    const toBuilder = document.createElement("button");
+    toBuilder.className = "iconBtn";
+    toBuilder.title = "Move this phrase back into the Word Builder";
+    toBuilder.innerHTML = `<i class="fa-solid fa-arrow-turn-up"></i>`;
+    toBuilder.addEventListener("click", () => savedMoveTo("builder", entry.id));
+
+    // Move to Rack
+    const toRack = document.createElement("button");
+    toRack.className = "iconBtn";
+    toRack.title = "Move letters to Rack (spaces delete)";
+    toRack.innerHTML = `<i class="fa-solid fa-grip-lines"></i>`;
+    toRack.addEventListener("click", () => savedMoveTo("rack", entry.id));
+
+    // Return to Bag (trash)
+    const toBag = document.createElement("button");
+    toBag.className = "iconBtn danger";
+    toBag.title = "Return letters to the bag (spaces delete)";
+    toBag.innerHTML = `<i class="fa-solid fa-trash"></i>`;
+    toBag.addEventListener("click", () => savedMoveTo("bag", entry.id));
+
+    actions.appendChild(toBuilder);
+    actions.appendChild(toRack);
+
+    // Typeset-only actions
+    if (entry.typeset && state.settings.spellMode){
+      const castAgain = document.createElement("button");
+      castAgain.className = "iconBtn";
+      castAgain.title = "Generate a resolve card for this Typeset spell (no new draw)";
+      castAgain.innerHTML = `<i class="fa-solid fa-wand-magic-sparkles"></i>`;
+      castAgain.addEventListener("click", () => {
+        // Temporarily put phrase into builder to compute card, then restore
+        pushHistory();
+        const prev = deepClone({ builder: state.builder, lastDrawIds: state.lastDrawIds });
+        state.builder = deepClone(entry.tiles);
+        state.lastDrawIds = [];
+        renderAll();
+        document.getElementById("resolveOut").value = buildResolveCard();
+        toast("Resolve card ready", "Scroll up to Spellcasting Helper — your card is generated.");
+        // Restore builder state (but keep the resolve output)
+        state.builder = prev.builder;
+        state.lastDrawIds = prev.lastDrawIds;
+        history.pop(); // remove temporary snapshot
+        renderAll();
+      });
+
+      const release = document.createElement("button");
+      release.className = "iconBtn danger";
+      release.title = "Release (return letters to bag) and remove this Typeset spell";
+      release.innerHTML = `<i class="fa-solid fa-unlock"></i>`;
+      release.addEventListener("click", () => releaseTypeset(entry.id));
+
+      actions.appendChild(castAgain);
+      actions.appendChild(release);
+    }
+
+    actions.appendChild(toBag);
+
+    item.appendChild(left);
+    item.appendChild(actions);
+    savedList.appendChild(item);
+  }
+}
+
+function renderTextOut(){
+  const builderPhrase = phraseFromTiles(state.builder);
+  const rackPhrase = phraseFromTiles(state.rack);
+  const out = builderPhrase.trim().length ? builderPhrase : rackPhrase;
+  textOut.value = out;
+}
+
+function renderStats(){
+  document.getElementById("bagRemaining").textContent = state.settings.persistent ? String(state.bag.length) : "∞";
+  document.getElementById("rackCount").textContent = String(state.rack.length);
+  document.getElementById("builderPoints").textContent = String(builderPoints());
+
+  const pill = document.getElementById("modePill");
+  pill.textContent = `Persistent Bag: ${state.settings.persistent ? "ON" : "OFF"}`;
+
+  const persistToggle = document.getElementById("persistToggle");
+  persistToggle.checked = state.settings.persistent;
+
+  const savedPill = document.getElementById("savedPill");
+  savedPill.textContent = `${state.saved.length} saved`;
+
+  updateSpellNumbers();
+}
+
+function renderAll(){
+  renderZone(rackZone, state.rack, "rack");
+  renderZone(builderZone, state.builder, "builder");
+  // bagZone is just a drop target, no tiles displayed
+  renderLastDraw();
+  renderSaved();
+  renderTextOut();
+  renderStats();
+
+  // Spell panel visibility
+  const spellPanel = document.getElementById("spellPanel");
+  const typesetBtn = document.getElementById("typesetBtn");
+  const spellOn = !!state.settings.spellMode;
+  spellPanel.classList.toggle("on", spellOn);
+  typesetBtn.style.display = spellOn ? "inline-flex" : "none";
+
+  // Sync inputs
+  document.getElementById("spellModeToggle").checked = spellOn;
+  document.getElementById("diceUsed").value = state.settings.diceUsed;
+  document.getElementById("complexity").value = String(state.settings.complexity);
+  document.getElementById("intent").value = state.settings.intent || "";
+}
+
+function renderAllFirstTime(){
+  // Build dice buttons
+  const diceBtns = document.getElementById("diceBtns");
+  diceBtns.innerHTML = "";
+  for (let n=1;n<=6;n++){
+    const b = document.createElement("button");
+    b.className = "btn secondary mini";
+    b.title = `Roll ${n}d6 and draw that many tiles`;
+    b.innerHTML = `<i class="fa-solid fa-dice-d6"></i> ${n}d6`;
+    b.addEventListener("click", () => {
+      const total = rollNd6(n);
+      document.getElementById("drawCount").value = total;
+      // Set diceUsed for spell panel
+      state.settings.diceUsed = n;
+      document.getElementById("diceUsed").value = n;
+      drawTiles(total);
+      renderAll();
+      toast("Dice roll", `${n}d6 → ${total} tiles drawn.`);
+    });
+    diceBtns.appendChild(b);
+  }
+
+  // Blank modal letter grid
+  const grid = document.getElementById("letterGrid");
+  const letters = "ABCDEFGHIJKLMNOPQRSTUVWXYZ".split("");
+  for (const ch of letters){
+    const btn = document.createElement("button");
+    btn.className = "letterPick";
+    btn.textContent = ch;
+    btn.addEventListener("click", () => assignBlank(ch));
+    grid.appendChild(btn);
+  }
+  const clear = document.createElement("button");
+  clear.className = "letterPick clear";
+  clear.innerHTML = `<i class="fa-solid fa-ban"></i> Clear`;
+  clear.addEventListener("click", () => assignBlank(null));
+  grid.appendChild(clear);
+
+  renderAll();
+}
+
+/* ============================
+   DRAG & DROP WIRING
+   ============================ */
+function wireDropZone(zoneEl, zoneName){
+  zoneEl.addEventListener("dragover", (e) => {
+    e.preventDefault();
+    zoneEl.classList.add("dragOver");
+  });
+  zoneEl.addEventListener("dragleave", () => zoneEl.classList.remove("dragOver"));
+  zoneEl.addEventListener("drop", (e) => {
+    e.preventDefault();
+    zoneEl.classList.remove("dragOver");
+
+    let payload = dragPayload;
+    // attempt to recover payload from dataTransfer (works across some browsers)
+    try {
+      const txt = e.dataTransfer.getData("text/plain");
+      if (txt) payload = JSON.parse(txt);
+    } catch {}
+
+    const insertIndex = (zoneName === "rack" || zoneName === "builder")
+      ? findInsertIndex(zoneEl, e)
+      : 0;
+
+    dropTile(payload, zoneName, insertIndex);
+  });
+}
+
+wireDropZone(rackZone, "rack");
+wireDropZone(builderZone, "builder");
+wireDropZone(bagZone, "bag");
+
+// Space token drag
+const spaceToken = document.getElementById("spaceToken");
+spaceToken.addEventListener("dragstart", (e) => {
+  dragPayload = { kind:"spaceTemplate" };
+  try { e.dataTransfer.setData("text/plain", JSON.stringify(dragPayload)); } catch {}
+  e.dataTransfer.effectAllowed = "copy";
+});
+
+/* ============================
+   UI EVENTS
+   ============================ */
+document.getElementById("drawBtn").addEventListener("click", () => {
+  const n = document.getElementById("drawCount").value;
+  drawTiles(n);
+});
+
+document.getElementById("undoBtn").addEventListener("click", undo);
+
+document.getElementById("resetBagBtn").addEventListener("click", () => {
+  pushHistory();
+  state.bag = initFullBag();
+  state.rack = [];
+  state.builder = [];
+  state.saved = [];
+  state.lastDrawIds = [];
+  toast("Bag reset", "Bag restored to 100 tiles; rack/builder/saved cleared.");
+  renderAll();
+});
+
+document.getElementById("persistToggle").addEventListener("change", (e) => {
+  pushHistory();
+  state.settings.persistent = !!e.target.checked;
+  toast("Mode changed", `Persistent bag is now ${state.settings.persistent ? "ON" : "OFF"}.`);
+  renderAll();
+});
+
+document.getElementById("spellModeToggle").addEventListener("change", (e) => {
+  pushHistory();
+  state.settings.spellMode = !!e.target.checked;
+  toast("Spellcasting Mode", state.settings.spellMode ? "Enabled." : "Disabled.");
+  renderAll();
+});
+
+document.getElementById("diceUsed").addEventListener("change", (e) => {
+  state.settings.diceUsed = clampInt(e.target.value, 1, 6);
+  updateSpellNumbers();
+});
+
+document.getElementById("complexity").addEventListener("change", (e) => {
+  state.settings.complexity = Number(e.target.value) || 0;
+  updateSpellNumbers();
+});
+
+document.getElementById("intent").addEventListener("input", (e) => {
+  state.settings.intent = e.target.value;
+});
+
+document.getElementById("resolveBtn").addEventListener("click", () => {
+  document.getElementById("resolveOut").value = buildResolveCard();
+  toast("Resolve card created", "Copied? Use the Copy Card button.");
+});
+
+document.getElementById("copyResolveBtn").addEventListener("click", async () => {
+  const txt = document.getElementById("resolveOut").value || "";
+  if (!txt.trim()){
+    toast("Nothing to copy", "Generate a resolve card first.");
+    return;
+  }
+  await copyToClipboard(txt);
+  toast("Copied", "Resolve card copied to clipboard.");
+});
+
+document.getElementById("copyTextBtn").addEventListener("click", async () => {
+  await copyToClipboard(textOut.value || "");
+  toast("Copied", "Text output copied to clipboard.");
+});
+
+document.getElementById("clearBuilderBtn").addEventListener("click", clearBuilderToRack);
+document.getElementById("clearRackBtn").addEventListener("click", clearRackToBag);
+document.getElementById("returnAllBtn").addEventListener("click", returnAllToBag);
+
+document.getElementById("addSpaceBtn").addEventListener("click", addSpaceToBuilder);
+
+document.getElementById("saveBuilderBtn").addEventListener("click", () => saveBuilder({typeset:false}));
+document.getElementById("typesetBtn").addEventListener("click", () => saveBuilder({typeset:true}));
+
+// Blank modal
+document.getElementById("closeBlankModal").addEventListener("click", closeBlankModal);
+document.getElementById("blankModalBackdrop").addEventListener("click", (e) => {
+  if (e.target.id === "blankModalBackdrop") closeBlankModal();
+});
+
+/* ============================
+   UTILS
+   ============================ */
+function rollNd6(n){
+  let total = 0;
+  for (let i=0;i<n;i++) total += (1 + Math.floor(Math.random()*6));
+  return total;
+}
+
+async function copyToClipboard(text){
+  try{
+    await navigator.clipboard.writeText(text);
+    return true;
+  }catch{
+    // fallback
+    const ta = document.createElement("textarea");
+    ta.value = text;
+    document.body.appendChild(ta);
+    ta.select();
+    try { document.execCommand("copy"); } catch {}
+    document.body.removeChild(ta);
+    return true;
+  }
+}
+
+let toastTimer = null;
+function toast(title, msg){
+  const el = document.getElementById("toast");
+  document.getElementById("toastTitle").textContent = title;
+  document.getElementById("toastMsg").textContent = msg;
+  el.style.display = "block";
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => { el.style.display = "none"; }, 3200);
+}
+
+/* ============================
+   START
+   ============================ */
+renderAllFirstTime();
+</script>
+</body>
+</html>
